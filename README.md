@@ -44,6 +44,17 @@ python3 -m searchengine.cli search '"ベクトル検索" OR BM25 type:markdown' 
 python3 -m searchengine.cli stats --db /tmp/search.db
 ```
 
+## Discord 通知（オプション）
+
+インデックス作成完了時に Discord に通知するには、環境変数を設定：
+
+```bash
+export DISCORD_WEBHOOK_COMPLETION="https://discordapp.com/api/webhooks/..."
+export DISCORD_WEBHOOK_ERRORS="https://discordapp.com/api/webhooks/..."
+```
+
+設定しない場合は通知されません（処理に影響なし）。
+
 ## テスト
 
 ```bash
