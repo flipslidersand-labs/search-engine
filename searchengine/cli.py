@@ -11,9 +11,11 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 
 from . import hybrid, ingest, query, tokenizer
 from .index import Index
+from .notifiers import DiscordNotifier
 
 
 def _make_index(args: argparse.Namespace, *, want_vector: bool) -> Index:
@@ -26,23 +28,47 @@ def _make_index(args: argparse.Namespace, *, want_vector: bool) -> Index:
 
 
 def cmd_index(args: argparse.Namespace) -> int:
-    idx = _make_index(args, want_vector=args.vector)
-    count = 0
-    for path in ingest.iter_files(args.target):
-        text = ingest.read_text(path)
-        idx.add_document(
-            path,
-            text,
-            doc_type=ingest.detect_type(path) or "text",
-            mtime=os.path.getmtime(path),
+    notifier = DiscordNotifier()
+    start_time = time.time()
+
+    try:
+        idx = _make_index(args, want_vector=args.vector)
+        count = 0
+        for path in ingest.iter_files(args.target):
+            text = ingest.read_text(path)
+            idx.add_document(
+                path,
+                text,
+                doc_type=ingest.detect_type(path) or "text",
+                mtime=os.path.getmtime(path),
+            )
+            count += 1
+        s = idx.stats()
+        vec_info = f" | embedder={idx.embedder.backend}" if idx.embedder else ""
+        idx.close()
+
+        duration = time.time() - start_time
+        print(f"indexed {count} file(s) | tokenizer={tokenizer.backend()}{vec_info}")
+        print(f"documents={s['documents']} chunks={s['chunks']}")
+
+        # Send Discord notification
+        notifier.send_indexing_complete(
+            doc_count=s["documents"],
+            chunk_count=s["chunks"],
+            duration_seconds=duration,
+            tokenizer=tokenizer.backend(),
+            has_vector=args.vector,
         )
-        count += 1
-    s = idx.stats()
-    vec_info = f" | embedder={idx.embedder.backend}" if idx.embedder else ""
-    idx.close()
-    print(f"indexed {count} file(s) | tokenizer={tokenizer.backend()}{vec_info}")
-    print(f"documents={s['documents']} chunks={s['chunks']}")
-    return 0
+
+        return 0
+    except Exception as e:
+        # Send error notification
+        notifier.send_indexing_error(
+            error_message=str(e),
+            error_type=type(e).__name__,
+            doc_path=getattr(args, "target", None),
+        )
+        raise
 
 
 def cmd_search(args: argparse.Namespace) -> int:
