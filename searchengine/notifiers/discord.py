@@ -3,7 +3,7 @@
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from urllib.error import URLError
 from urllib.request import Request, urlopen
@@ -58,7 +58,7 @@ class DiscordNotifier:
           {"name": "Tokenizer", "value": tokenizer, "inline": True},
           {"name": "Search Mode", "value": backend, "inline": True},
         ],
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(UTC).isoformat(),
       }
 
       return self._send_webhook(self.completion_webhook, {"embeds": [embed]})
@@ -102,7 +102,7 @@ class DiscordNotifier:
         "description": error_message,
         "color": 15158332,  # Red
         "fields": fields,
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(UTC).isoformat(),
       }
 
       return self._send_webhook(self.error_webhook, {"embeds": [embed]})
