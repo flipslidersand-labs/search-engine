@@ -192,10 +192,10 @@ def test_ask_endpoint_custom_ollama_url(indexed_client):
             json={
                 "question": "テスト",
                 "mode": "keyword",
-                "ollama_url": "http://192.168.68.59:11434",
+                "ollama_url": "http://<internal-host>:11434",
             },
         )
 
     assert r.status_code == 200
     called_url = mock_post.call_args[0][0]
-    assert "192.168.68.59" in called_url
+    assert "<internal-host>" in called_url

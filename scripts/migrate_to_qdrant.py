@@ -2,7 +2,7 @@
 """SQLite ベクトルストア → Qdrant 移行スクリプト。
 
 使い方:
-    python scripts/migrate_to_qdrant.py --db search.db --qdrant-url http://192.168.68.63:6333
+    python scripts/migrate_to_qdrant.py --db search.db --qdrant-url http://<internal-host>:6333
     python scripts/migrate_to_qdrant.py --db search.db --dry-run   # 書き込みなし確認
 """
 

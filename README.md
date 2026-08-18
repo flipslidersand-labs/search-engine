@@ -63,7 +63,7 @@ pip install -r requirements.txt
 python3 -m searchengine.cli index ./sample_docs --db search.db
 
 # ベクトル索引も同時構築（EMBEDDING_URL 推奨）
-EMBEDDING_URL=http://192.168.68.63:9092 \
+EMBEDDING_URL=http://<internal-host>:9092 \
   python3 -m searchengine.cli index ./sample_docs --db search.db --vector
 ```
 
