@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MINIPC (<internal-ip>) へのデプロイスクリプト。
+# MINIPC (<internal-host>) へのデプロイスクリプト。
 # 使い方: ./deploy.sh [--host <ip>] [--port <port>]
 set -euo pipefail
 
