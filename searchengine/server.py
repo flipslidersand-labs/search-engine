@@ -16,12 +16,11 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 from pathlib import Path
 from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query  # pylint: disable=import-error
-from fastapi.responses import FileResponse, HTMLResponse  # pylint: disable=import-error
+from fastapi.responses import HTMLResponse  # pylint: disable=import-error
 from fastapi.security.api_key import APIKeyHeader  # pylint: disable=import-error
 from pydantic import BaseModel  # pylint: disable=import-error
 
@@ -198,15 +197,16 @@ def index_files(req: IndexRequest) -> IndexResponse:
 @app.get("/search", response_model=SearchResponse, dependencies=[Depends(require_api_key)])
 def search(
     q: str = Query(..., description="検索クエリ"),
-    mode: Literal["keyword", "vector", "hybrid"] = Query("keyword"),
+    mode: Literal["keyword", "vector", "hybrid", "nugget"] = Query("keyword"),
     n: int = Query(10, ge=1, le=100),
     db: str | None = Query(None),
+    nuggets_per_chunk: int = Query(3, ge=1, le=10, description="nugget モードで抽出する文数"),
 ) -> SearchResponse:
     """クエリを検索して上位 n 件を返す。"""
     if not q.strip():
         raise HTTPException(status_code=400, detail="クエリが空です")
 
-    want_vector = mode in ("vector", "hybrid")
+    want_vector = mode in ("vector", "hybrid", "nugget")
     idx = _open_index(db, want_vector=want_vector)
     parsed = query.parse(q)
 
@@ -218,6 +218,13 @@ def search(
                 hits = [
                     (h, h.score) for h in idx.vector_search(parsed.raw, limit=n, filters=parsed.filters)
                 ]
+            elif mode == "nugget":
+                from .nugget import extract_nuggets
+
+                fused = hybrid.search(idx, parsed, limit=n)
+                hits = [(f.hit, f.rrf) for f in fused]
+                for h, _ in hits:
+                    h.snippet = extract_nuggets(q, h.snippet, top_k=nuggets_per_chunk)
             else:
                 fused = hybrid.search(idx, parsed, limit=n)
                 hits = [(f.hit, f.rrf) for f in fused]
