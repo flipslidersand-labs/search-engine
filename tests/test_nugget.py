@@ -1,8 +1,8 @@
 """Tests for searchengine.nugget module."""
+
 from __future__ import annotations
 
 from searchengine.nugget import bm25_scores, extract_nuggets, split_sentences
-
 
 # ── split_sentences ───────────────────────────────────────────────────────────
 

@@ -1,7 +1,13 @@
 """解析結果を Markdown / SQL / ER図 で出力する。"""
+
 from __future__ import annotations
+
 from .analyzer import ColumnInfo
-from .er import detect_fk_candidates, detect_normalization_issues, render_mermaid, render_sql_with_fk
+from .er import (
+    detect_fk_candidates,
+    detect_normalization_issues,
+    render_mermaid,
+)
 
 
 def report_markdown(filename: str, columns: list[ColumnInfo], row_count: int) -> str:
@@ -71,7 +77,7 @@ def report_er(table_name: str, columns: list[ColumnInfo]) -> str:
     hints = detect_normalization_issues(columns)
 
     lines = [
-        f"## ER図（Mermaid）",
+        "## ER図（Mermaid）",
         "",
         "```mermaid",
         render_mermaid(table_name, columns, relations),
@@ -83,7 +89,9 @@ def report_er(table_name: str, columns: list[ColumnInfo]) -> str:
         for r in relations:
             lines.append(f"- `{r.from_col}` → `{r.ref_table}.{r.ref_col}`（推定）")
         lines.append("")
-        lines.append("> ⚠️ FK 先テーブルはファイルから自動推定したスタブです。実際のテーブル名・カラム名を確認してください。")
+        lines.append(
+            "> ⚠️ FK 先テーブルはファイルから自動推定したスタブです。実際のテーブル名・カラム名を確認してください。"
+        )
 
     if hints:
         lines += ["", "### 正規化提案", ""]

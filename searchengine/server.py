@@ -19,14 +19,25 @@ import os
 from pathlib import Path
 from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Query  # pylint: disable=import-error
+from fastapi import (  # pylint: disable=import-error
+    Depends,
+    FastAPI,
+    HTTPException,
+    Query,
+)
 from fastapi.responses import HTMLResponse  # pylint: disable=import-error
 from fastapi.security.api_key import APIKeyHeader  # pylint: disable=import-error
 from pydantic import BaseModel  # pylint: disable=import-error
 
 from . import hybrid, ingest, query, tokenizer
 from .index import Index
-from .metrics import metrics_output, track_index, track_rag, track_search, update_index_gauges
+from .metrics import (
+    metrics_output,
+    track_index,
+    track_rag,
+    track_search,
+    update_index_gauges,
+)
 from .schema_gen.api import router as schema_router
 
 # ── DB パス（起動時に差し替え可） ────────────────────────────────────────────
@@ -213,10 +224,13 @@ def search(
     with track_search(mode):
         try:
             if mode == "keyword":
-                hits = [(h, h.score) for h in idx.search(parsed.fts, limit=n, filters=parsed.filters)]
+                hits = [
+                    (h, h.score) for h in idx.search(parsed.fts, limit=n, filters=parsed.filters)
+                ]
             elif mode == "vector":
                 hits = [
-                    (h, h.score) for h in idx.vector_search(parsed.raw, limit=n, filters=parsed.filters)
+                    (h, h.score)
+                    for h in idx.vector_search(parsed.raw, limit=n, filters=parsed.filters)
                 ]
             elif mode == "nugget":
                 from .nugget import extract_nuggets
@@ -264,7 +278,9 @@ def stats(db: str | None = Query(None)) -> StatsResponse:
 def ask(req: AskRequest) -> AskResponse:
     """RAG: 検索 → Ollama で回答生成。"""
     import os
+
     import httpx as httpx_module
+
     from . import rag as rag_module
 
     if not req.question.strip():

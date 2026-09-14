@@ -1,12 +1,12 @@
 """er.py のテスト"""
-import pytest
+
 from searchengine.schema_gen.analyzer import analyze
 from searchengine.schema_gen.er import (
+    _guess_ref_table,
     detect_fk_candidates,
     detect_normalization_issues,
     render_mermaid,
     render_sql_with_fk,
-    _guess_ref_table,
 )
 
 
@@ -60,10 +60,7 @@ class TestDetectNormalizationIssues:
         assert any("繰り返し" in h.issue for h in hints)
 
     def test_high_null_concentration(self):
-        rows = [
-            {"id": str(i), "a": None, "b": None, "c": None, "d": "x"}
-            for i in range(1, 11)
-        ]
+        rows = [{"id": str(i), "a": None, "b": None, "c": None, "d": "x"} for i in range(1, 11)]
         cols = _make_cols(rows)
         hints = detect_normalization_issues(cols)
         assert any("NULL率" in h.issue for h in hints)
@@ -80,6 +77,7 @@ class TestRenderMermaid:
         rows = [{"order_id": str(i), "customer_id": str(i * 10)} for i in range(1, 4)]
         cols = _make_cols(rows)
         from searchengine.schema_gen.er import FKRelation
+
         fks = [FKRelation(from_col="customer_id", ref_table="customers")]
         mermaid = render_mermaid("orders", cols, fks)
         assert "erDiagram" in mermaid
@@ -99,6 +97,7 @@ class TestRenderSQLWithFK:
         rows = [{"order_id": str(i), "customer_id": str(i * 10)} for i in range(1, 4)]
         cols = _make_cols(rows)
         from searchengine.schema_gen.er import FKRelation
+
         fks = [FKRelation(from_col="customer_id", ref_table="customers")]
         sql = render_sql_with_fk("orders", cols, fks)
         assert "FOREIGN KEY" in sql

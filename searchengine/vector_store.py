@@ -32,6 +32,7 @@ try:
         PointStruct,
         VectorParams,
     )
+
     _HAS_QDRANT = True
 except ImportError:
     QdrantClient = None  # type: ignore
@@ -133,6 +134,7 @@ QDRANT_COLLECTION = "search-engine-docs"
 QDRANT_VECTOR_SIZE = int(os.environ.get("QDRANT_VECTOR_SIZE", "768"))
 QDRANT_DISTANCE = "Cosine"
 
+
 class QdrantVectorStore:
     """Qdrant をバックエンドとするベクトルストア。"""
 
@@ -144,8 +146,7 @@ class QdrantVectorStore:
     ) -> None:
         if not _HAS_QDRANT:
             raise ImportError(
-                "Qdrant 連携には追加パッケージが必要です:\n"
-                "  pip install qdrant-client"
+                "Qdrant 連携には追加パッケージが必要です:\n  pip install qdrant-client"
             )
         self._client = QdrantClient(url=url)
         self._collection = collection

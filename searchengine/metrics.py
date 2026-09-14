@@ -13,18 +13,19 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator
 
 try:
     from prometheus_client import (  # pylint: disable=import-error
+        CONTENT_TYPE_LATEST,
+        REGISTRY,
         Counter,
         Gauge,
         Histogram,
         generate_latest,
-        CONTENT_TYPE_LATEST,
-        REGISTRY,
     )
+
     _HAS_PROMETHEUS = True
 except ImportError:
     _HAS_PROMETHEUS = False

@@ -133,7 +133,7 @@ def test_remote_embedder_dim_from_service():
 
 
 def test_remote_embedder_encode_single():
-    with _remote_embedder(dim=4) as (e, expected_vec):
+    with _remote_embedder(dim=4) as (e, _expected_vec):
         vec = _unit_vec(4)
         resp = _make_resp(vec)
         with patch("httpx.post", return_value=resp):
@@ -229,7 +229,7 @@ def test_remote_embedder_encode_empty_returns_empty():
 
 def test_remote_embedder_passes_mode_to_service():
     vec = _unit_vec(4)
-    with patch("httpx.post", return_value=_make_resp(vec)) as mock_init:
+    with patch("httpx.post", return_value=_make_resp(vec)):
         e = RemoteEmbedder(_TEST_URL, collection="search-engine")
 
     with patch("httpx.post", return_value=_make_resp(vec)) as mock_post:
@@ -270,9 +270,11 @@ def test_remote_embedder_http_error_propagates():
     with patch("httpx.post", return_value=_make_resp(vec)):
         e = RemoteEmbedder(_TEST_URL)
 
-    with patch("httpx.post", side_effect=httpx.ConnectError("接続失敗")):
-        with pytest.raises(httpx.ConnectError):
-            e.encode(["text"])
+    with (
+        patch("httpx.post", side_effect=httpx.ConnectError("接続失敗")),
+        pytest.raises(httpx.ConnectError),
+    ):
+        e.encode(["text"])
 
 
 def test_remote_embedder_backend_contains_url():
@@ -296,32 +298,36 @@ def test_create_embedder_returns_local_without_url():
 
 def test_create_embedder_returns_fallback_with_url():
     vec = _unit_vec(4)
-    with patch("httpx.post", return_value=_make_resp(vec)):
-        with patch.dict(
+    with (
+        patch("httpx.post", return_value=_make_resp(vec)),
+        patch.dict(
             os.environ,
             {
                 "EMBEDDING_URL": _TEST_URL,
                 "EMBEDDING_COLLECTION": "search-engine",
                 "EMBEDDING_API_KEY": _TEST_API_KEY,
             },
-        ):
-            e = create_embedder()
+        ),
+    ):
+        e = create_embedder()
     assert isinstance(e, FallbackEmbedder)
     assert "localhost" in e.backend
 
 
 def test_create_embedder_passes_collection_from_env():
     vec = _unit_vec(4)
-    with patch("httpx.post", return_value=_make_resp(vec)):
-        with patch.dict(
+    with (
+        patch("httpx.post", return_value=_make_resp(vec)),
+        patch.dict(
             os.environ,
             {
                 "EMBEDDING_URL": _TEST_URL,
                 "EMBEDDING_COLLECTION": "custom-col",
             },
             clear=False,
-        ):
-            e = create_embedder()
+        ),
+    ):
+        e = create_embedder()
     assert isinstance(e, FallbackEmbedder)
     assert "custom-col" in e.backend
 

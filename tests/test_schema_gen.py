@@ -1,14 +1,13 @@
 """schema_gen Phase 1 テスト"""
+
 import csv
-import io
-import tempfile
 from pathlib import Path
 
 import pytest
 
-from searchengine.schema_gen.analyzer import analyze, _infer_type, _is_null
-from searchengine.schema_gen.reporter import report_markdown, report_sql
+from searchengine.schema_gen.analyzer import _infer_type, _is_null, analyze
 from searchengine.schema_gen.ingest import load_csv
+from searchengine.schema_gen.reporter import report_markdown, report_sql
 
 
 def _write_csv(rows: list[dict], path: Path) -> None:
@@ -133,6 +132,6 @@ class TestIngestCSV:
         p = tmp_path / "test.csv"
         rows = [{"a": "1", "b": "hello"}, {"a": "2", "b": "world"}]
         _write_csv(rows, p)
-        loaded, name = load_csv(p), "test.csv"
+        loaded = load_csv(p)
         assert len(loaded) == 2
         assert loaded[0]["a"] == "1"

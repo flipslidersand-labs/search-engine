@@ -2,6 +2,7 @@
 
 スキーマ解析結果を保存し、カラム名・型・テーブル名で全文検索できる。
 """
+
 from __future__ import annotations
 
 import json

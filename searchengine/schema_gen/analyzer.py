@@ -1,9 +1,9 @@
 """カラム構造解析: 型推定・NULL率・重複率・主キー候補を算出する。"""
+
 from __future__ import annotations
+
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
-
 
 _DATE_PATTERNS = [
     r"^\d{4}[-/]\d{1,2}[-/]\d{1,2}$",
@@ -15,9 +15,7 @@ _DATE_PATTERNS = [
 def _is_null(v) -> bool:
     if v is None:
         return True
-    if isinstance(v, str) and v.strip() in ("", "NULL", "null", "None", "N/A", "na", "NA", "-"):
-        return True
-    return False
+    return isinstance(v, str) and v.strip() in ("", "NULL", "null", "None", "N/A", "na", "NA", "-")
 
 
 def _infer_type(values: list) -> str:
@@ -54,13 +52,13 @@ def _infer_type(values: list) -> str:
         return "NUMERIC"
 
     # date
-    if any(re.match(p, s) for s in samples[:20] for p in _DATE_PATTERNS):
-        if all(any(re.match(p, s) for p in _DATE_PATTERNS) for s in samples):
-            return "DATE"
+    if any(re.match(p, s) for s in samples[:20] for p in _DATE_PATTERNS) and all(
+        any(re.match(p, s) for p in _DATE_PATTERNS) for s in samples
+    ):
+        return "DATE"
 
     # text length → VARCHAR か TEXT か
     lengths = [len(s) for s in samples]
-    avg_len = sum(lengths) / len(lengths) if lengths else 0
     max_len = max(lengths) if lengths else 0
     if max_len <= 255:
         return f"VARCHAR({min(255, max(max_len * 2, 50))})"
@@ -103,7 +101,7 @@ def analyze(rows: list[dict]) -> list[ColumnInfo]:
         values = [row.get(col) for row in rows]
         null_count = sum(1 for v in values if _is_null(v))
         non_null_vals = [v for v in values if not _is_null(v)]
-        unique_count = len(set(str(v) for v in non_null_vals))
+        unique_count = len({str(v) for v in non_null_vals})
         inferred = _infer_type(non_null_vals)
 
         # サンプル値（重複排除・最大5件）
@@ -117,13 +115,15 @@ def analyze(rows: list[dict]) -> list[ColumnInfo]:
             if len(samples) >= 5:
                 break
 
-        results.append(ColumnInfo(
-            name=col,
-            inferred_type=inferred,
-            total=total,
-            null_count=null_count,
-            unique_count=unique_count,
-            sample_values=samples,
-        ))
+        results.append(
+            ColumnInfo(
+                name=col,
+                inferred_type=inferred,
+                total=total,
+                null_count=null_count,
+                unique_count=unique_count,
+                sample_values=samples,
+            )
+        )
 
     return results

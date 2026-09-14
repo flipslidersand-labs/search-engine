@@ -1,20 +1,21 @@
 """schema-gen API のテスト（store + FastAPI エンドポイント）"""
-import json
-import pytest
-from pathlib import Path
 
+import pytest
 
 # ── SchemaStore ───────────────────────────────────────────────────────────────
+
 
 class TestSchemaStore:
     @pytest.fixture
     def store(self, tmp_path):
         from searchengine.schema_gen.store import SchemaStore
+
         return SchemaStore(tmp_path / "test.db")
 
     @pytest.fixture
     def sample_cols(self):
         from searchengine.schema_gen.analyzer import analyze
+
         rows = [
             {"order_id": str(i), "customer_id": str(i % 3 + 1), "total": str(i * 100)}
             for i in range(1, 6)
@@ -79,16 +80,19 @@ class TestSchemaStore:
 
 # ── FastAPI エンドポイント ───────────────────────────────────────────────────
 
+
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("SCHEMA_DB", str(tmp_path / "test.db"))
-    import importlib
     import searchengine.schema_gen.api as api_mod
+
     # SCHEMA_DB を再読込
     api_mod._SCHEMA_DB = str(tmp_path / "test.db")
 
     from fastapi.testclient import TestClient
+
     from searchengine.server import app
+
     return TestClient(app)
 
 
