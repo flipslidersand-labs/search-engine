@@ -1,0 +1,16 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python-test:
+    uses: flipslidersand-labs/qa-workflows/.github/workflows/python-test.yml@main
+    with:
+      python-version: "3.12"
+      coverage-threshold: 80
+      install-command: "pip install -r requirements.txt pytest pytest-cov --quiet"
+      test-path: "tests/"
+      run-lint: false
