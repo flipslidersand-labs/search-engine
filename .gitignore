@@ -25,3 +25,4 @@ credentials*.json
 .pytest_cache/
 dist/
 *.egg-info/
+.coverage
