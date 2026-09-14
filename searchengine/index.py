@@ -13,6 +13,7 @@ import sqlite3
 from dataclasses import dataclass
 
 from . import chunker, tokenizer
+from .contextual import add_context
 from .vector_store import VectorStore
 
 
@@ -52,7 +53,7 @@ def _doc_id(path: str) -> str:
 
 
 class Index:
-    def __init__(self, db_path: str, embedder=None) -> None:
+    def __init__(self, db_path: str, embedder=None, use_contextual_prefix: bool = False) -> None:
         self.db_path = db_path
         self.conn = sqlite3.connect(db_path)
         self.conn.executescript(SCHEMA)
@@ -60,6 +61,10 @@ class Index:
         # embedder を渡すとベクトル索引も同 DB に構築（設計書 §2.6）
         self.embedder = embedder
         self.vectors = VectorStore(self.conn) if embedder is not None else None
+        # Contextual Retrieval (#78): 有効時は検索用テキスト（FTS content・
+        # 埋め込みベクトル）にのみ位置づけ説明を前置する。スニペット表示用の
+        # "original" は常に元のチャンクテキストのまま保持する。
+        self.use_contextual_prefix = use_contextual_prefix
 
     def close(self) -> None:
         self.conn.close()
@@ -79,14 +84,17 @@ class Index:
         if self.vectors is not None:
             self.vectors.delete_doc(doc_id)
         chunks = chunker.chunk_text(text)
-        for ch in chunks:
+        search_chunks = (
+            add_context(text, chunks) if (self.use_contextual_prefix and chunks) else chunks
+        )
+        for ch, search_ch in zip(chunks, search_chunks):
             self.conn.execute(
                 "INSERT INTO chunks_fts (content, original, doc_id, chunk_index)"
                 " VALUES (?, ?, ?, ?)",
-                (tokenizer.tokenized_text(ch.text), ch.text, doc_id, ch.index),
+                (tokenizer.tokenized_text(search_ch.text), ch.text, doc_id, ch.index),
             )
         if self.vectors is not None and chunks:
-            vecs = self.embedder.encode([c.text for c in chunks])
+            vecs = self.embedder.encode([c.text for c in search_chunks])
             for ch, vec in zip(chunks, vecs):
                 self.vectors.upsert(doc_id, ch.index, vec)
         self.conn.execute(
