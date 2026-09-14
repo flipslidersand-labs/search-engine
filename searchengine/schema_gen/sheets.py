@@ -8,12 +8,12 @@
   2. OAuth2: --credentials client_secret.json（初回ブラウザ認証）
   3. 環境変数: GOOGLE_APPLICATION_CREDENTIALS
 """
+
 from __future__ import annotations
 
 import os
 import re
 from pathlib import Path
-
 
 _SPREADSHEET_ID_RE = re.compile(r"/spreadsheets/d/([a-zA-Z0-9_-]+)")
 
@@ -26,10 +26,9 @@ def extract_spreadsheet_id(url_or_id: str) -> str:
 
 def _build_service(credentials_path: str | None):
     try:
-        from googleapiclient.discovery import build
-        from google.oauth2 import service_account
         from google.auth import default as google_default
-        import google.auth.transport.requests
+        from google.oauth2 import service_account
+        from googleapiclient.discovery import build
     except ImportError:
         raise ImportError(
             "Google Sheets 連携には追加パッケージが必要です:\n"
@@ -43,13 +42,12 @@ def _build_service(credentials_path: str | None):
         if not p.exists():
             raise FileNotFoundError(f"認証ファイルが見つかりません: {credentials_path}")
         import json
+
         cred_data = json.loads(p.read_text())
         cred_type = cred_data.get("type", "")
 
         if cred_type == "service_account":
-            creds = service_account.Credentials.from_service_account_file(
-                str(p), scopes=SCOPES
-            )
+            creds = service_account.Credentials.from_service_account_file(str(p), scopes=SCOPES)
         else:
             # OAuth2 client secret → ブラウザ認証フロー
             creds = _oauth2_flow(str(p), SCOPES)
@@ -57,9 +55,7 @@ def _build_service(credentials_path: str | None):
         # GOOGLE_APPLICATION_CREDENTIALS 環境変数 or ADC
         env_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
         if env_path:
-            creds = service_account.Credentials.from_service_account_file(
-                env_path, scopes=SCOPES
-            )
+            creds = service_account.Credentials.from_service_account_file(env_path, scopes=SCOPES)
         else:
             creds, _ = google_default(scopes=SCOPES)
 
@@ -69,9 +65,9 @@ def _build_service(credentials_path: str | None):
 def _oauth2_flow(client_secret_path: str, scopes: list[str]):
     """OAuth2 ブラウザ認証フロー（トークンをローカルキャッシュ）。"""
     try:
-        from google_auth_oauthlib.flow import InstalledAppFlow
-        from google.oauth2.credentials import Credentials
         import google.auth.transport.requests
+        from google.oauth2.credentials import Credentials
+        from google_auth_oauthlib.flow import InstalledAppFlow
     except ImportError:
         raise ImportError("pip install google-auth-oauthlib")
 

@@ -26,9 +26,7 @@ from . import tokenizer
 
 def _stable_hash(token: str) -> int:
     """プロセス間で安定なハッシュ（組込 hash() はシード変動するため不可）。"""
-    return int.from_bytes(
-        hashlib.blake2b(token.encode("utf-8"), digest_size=8).digest(), "big"
-    )
+    return int.from_bytes(hashlib.blake2b(token.encode("utf-8"), digest_size=8).digest(), "big")
 
 
 _FALLBACK_DIM = 256
@@ -190,17 +188,16 @@ class RemoteEmbedder:
 
     def _request_with_retry(self, url: str, payload: dict, retries: int):
         """指定 URL へ POST し、transient 失敗はリトライする。最終例外は呼び出し側へ送出。"""
-        import httpx  # pylint: disable=import-error
         import logging
         import time
+
+        import httpx  # pylint: disable=import-error
 
         logger = logging.getLogger(__name__)
         last_exc: Exception | None = None
         for attempt in range(retries + 1):
             try:
-                resp = httpx.post(
-                    url, json=payload, headers=self._headers, timeout=self._timeout
-                )
+                resp = httpx.post(url, json=payload, headers=self._headers, timeout=self._timeout)
                 resp.raise_for_status()
                 return resp
             except httpx.HTTPStatusError as e:
@@ -214,15 +211,11 @@ class RemoteEmbedder:
                 last_exc = e
                 if attempt < retries:
                     time.sleep(0.5 * (attempt + 1))
-        logger.warning(
-            "RemoteEmbedder request failed after %d retries: %s", retries, last_exc
-        )
+        logger.warning("RemoteEmbedder request failed after %d retries: %s", retries, last_exc)
         assert last_exc is not None
         raise last_exc
 
-    def _encode_batch(
-        self, texts: list[str], mode: str, *, retries: int
-    ) -> list[list[float]]:
+    def _encode_batch(self, texts: list[str], mode: str, *, retries: int) -> list[list[float]]:
         """/embed/batch を1リクエストで叩く。非対応なら `_BatchUnsupported` を送出。"""
         import httpx  # pylint: disable=import-error
 
@@ -242,14 +235,10 @@ class RemoteEmbedder:
         if vectors is None:
             raise _BatchUnsupported()  # 旧サービス（単一 /embed のみ）
         if len(vectors) != len(texts):
-            raise ValueError(
-                f"/embed/batch returned {len(vectors)} vectors for {len(texts)} texts"
-            )
+            raise ValueError(f"/embed/batch returned {len(vectors)} vectors for {len(texts)} texts")
         return vectors
 
-    def _encode_serial(
-        self, texts: list[str], mode: str, *, retries: int
-    ) -> np.ndarray:
+    def _encode_serial(self, texts: list[str], mode: str, *, retries: int) -> np.ndarray:
         """1テキスト1リクエストの直列送信（バッチ非対応サービス向けフォールバック）。"""
         vecs = []
         for text in texts:

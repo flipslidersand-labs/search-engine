@@ -66,23 +66,34 @@ def ask(
 
     if mode == "keyword":
         hits = index.search(parsed.fts, limit=top_k, filters=parsed.filters)
-        sources = [Source(path=h.path, chunk_index=h.chunk_index, snippet=h.snippet, score=h.score) for h in hits]
+        sources = [
+            Source(path=h.path, chunk_index=h.chunk_index, snippet=h.snippet, score=h.score)
+            for h in hits
+        ]
     elif mode == "vector":
         hits = index.vector_search(parsed.raw, limit=top_k, filters=parsed.filters)
-        sources = [Source(path=h.path, chunk_index=h.chunk_index, snippet=h.snippet, score=h.score) for h in hits]
+        sources = [
+            Source(path=h.path, chunk_index=h.chunk_index, snippet=h.snippet, score=h.score)
+            for h in hits
+        ]
     else:
         fused = hybrid.search(index, parsed, limit=top_k)
-        sources = [Source(path=f.hit.path, chunk_index=f.hit.chunk_index, snippet=f.hit.snippet, score=f.rrf) for f in fused]
+        sources = [
+            Source(
+                path=f.hit.path, chunk_index=f.hit.chunk_index, snippet=f.hit.snippet, score=f.rrf
+            )
+            for f in fused
+        ]
 
-    context = "\n\n---\n\n".join(
-        f"[{i+1}] {s.path}\n{s.snippet}" for i, s in enumerate(sources)
-    )
+    context = "\n\n---\n\n".join(f"[{i + 1}] {s.path}\n{s.snippet}" for i, s in enumerate(sources))
 
     client = OllamaClient(base_url=ollama_url, model=model)
-    result: LLMResult = client.chat([
-        Message(role="system", content=_SYSTEM_PROMPT),
-        Message(role="user", content=_USER_TEMPLATE.format(context=context, question=question)),
-    ])
+    result: LLMResult = client.chat(
+        [
+            Message(role="system", content=_SYSTEM_PROMPT),
+            Message(role="user", content=_USER_TEMPLATE.format(context=context, question=question)),
+        ]
+    )
 
     latency_ms = int((time.monotonic() - t0) * 1000)
     return AskResult(

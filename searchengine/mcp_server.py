@@ -22,11 +22,11 @@ import json
 import os
 from typing import Literal
 
-from mcp.server import Server
 from mcp import types
+from mcp.server import Server
 
+from . import hybrid, ingest
 from .index import Index
-from . import hybrid, ingest, query
 from .query import parse as parse_query
 from .rag import ask as rag_ask
 
@@ -149,9 +149,7 @@ def create_server() -> Server:
 
         try:
             if name == "search":
-                mode: Literal["keyword", "vector", "hybrid"] = args.get(
-                    "mode", "hybrid"
-                )
+                mode: Literal["keyword", "vector", "hybrid"] = args.get("mode", "hybrid")
                 want_vector = mode in ("vector", "hybrid")
                 idx = _open_index(args.get("db"), want_vector=want_vector)
                 top_k: int = int(args.get("top_k", 5))
@@ -160,16 +158,12 @@ def create_server() -> Server:
                 if mode == "keyword":
                     raw_hits = [
                         (h, h.score)
-                        for h in idx.search(
-                            parsed.fts, limit=top_k, filters=parsed.filters
-                        )
+                        for h in idx.search(parsed.fts, limit=top_k, filters=parsed.filters)
                     ]
                 elif mode == "vector":
                     raw_hits = [
                         (h, h.score)
-                        for h in idx.vector_search(
-                            parsed.raw, limit=top_k, filters=parsed.filters
-                        )
+                        for h in idx.vector_search(parsed.raw, limit=top_k, filters=parsed.filters)
                     ]
                 else:
                     fused = hybrid.search(idx, parsed, limit=top_k)
@@ -252,9 +246,7 @@ def create_server() -> Server:
                     is_error=True,
                 )
 
-            return types.CallToolResult(
-                content=_make_text(json.dumps(result, ensure_ascii=False))
-            )
+            return types.CallToolResult(content=_make_text(json.dumps(result, ensure_ascii=False)))
 
         except Exception as exc:  # pylint: disable=broad-except
             return types.CallToolResult(
@@ -262,12 +254,8 @@ def create_server() -> Server:
                 is_error=True,
             )
 
-    server.add_request_handler(
-        "tools/list", types.PaginatedRequestParams, handle_list_tools
-    )
-    server.add_request_handler(
-        "tools/call", types.CallToolRequestParams, handle_call_tool
-    )
+    server.add_request_handler("tools/list", types.PaginatedRequestParams, handle_list_tools)
+    server.add_request_handler("tools/call", types.CallToolRequestParams, handle_call_tool)
 
     return server
 

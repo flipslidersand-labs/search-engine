@@ -3,6 +3,7 @@
 Based on the CoinRAG idea: instead of returning full chunks to the LLM,
 return only the top-N sentences most relevant to the query (nuggets).
 """
+
 from __future__ import annotations
 
 import math

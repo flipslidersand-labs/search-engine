@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
-import searchengine.vector_store as vs_mod
 from searchengine.vector_store import (
     QdrantVectorStore,
     VectorStoreProtocol,
@@ -31,7 +31,7 @@ def _make_client_mock(existing_collections: list[str] | None = None):
     col_mock.name = "search-engine-docs"
     collections_result = MagicMock()
     col_mocks = []
-    for n in (existing_collections or []):
+    for n in existing_collections or []:
         m = MagicMock()
         m.name = n
         col_mocks.append(m)
@@ -44,9 +44,6 @@ def _make_client_mock(existing_collections: list[str] | None = None):
     client.search.return_value = [hit]
 
     return client
-
-
-from contextlib import contextmanager
 
 
 @contextmanager
@@ -63,7 +60,9 @@ def _qdrant_patches(client_mock):
         FieldCondition=mm(side_effect=lambda key, match: {"key": key, "match": match}),
         MatchAny=mm(side_effect=lambda any: {"any": any}),
         MatchValue=mm(side_effect=lambda value: {"value": value}),
-        PointStruct=mm(side_effect=lambda id, vector, payload: MagicMock(id=id, vector=vector, payload=payload)),
+        PointStruct=mm(
+            side_effect=lambda id, vector, payload: MagicMock(id=id, vector=vector, payload=payload)
+        ),
     ):
         yield
 
@@ -172,6 +171,8 @@ def test_factory_returns_qdrant_with_url():
 
 
 def test_import_error_without_qdrant_client():
-    with patch("searchengine.vector_store._HAS_QDRANT", False):
-        with pytest.raises(ImportError, match="pip install qdrant-client"):
-            QdrantVectorStore(url="http://localhost:6333")
+    with (
+        patch("searchengine.vector_store._HAS_QDRANT", False),
+        pytest.raises(ImportError, match="pip install qdrant-client"),
+    ):
+        QdrantVectorStore(url="http://localhost:6333")
