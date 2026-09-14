@@ -138,7 +138,12 @@ def _open_index(db: str | None, *, want_vector: bool = False) -> Index:
         from .embedder import Embedder
 
         embedder = Embedder()
-    return Index(db_path, embedder=embedder)
+    use_contextual_prefix = os.environ.get("SEARCH_ENGINE_CONTEXTUAL_PREFIX", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    return Index(db_path, embedder=embedder, use_contextual_prefix=use_contextual_prefix)
 
 
 # ── エンドポイント ────────────────────────────────────────────────────────────

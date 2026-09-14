@@ -2,12 +2,20 @@
 
 import os
 import sys
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from searchengine import chunker, hybrid, query, tokenizer
 from searchengine.embedder import Embedder
 from searchengine.index import Index
+
+
+def _mock_ollama_response(content: str) -> MagicMock:
+    m = MagicMock()
+    m.raise_for_status = MagicMock()
+    m.json.return_value = {"message": {"content": content}}
+    return m
 
 
 def test_tokenize_nonempty():
@@ -45,6 +53,40 @@ def test_incremental_skip():
     idx.add_document("/x/a.md", "同じ内容")  # 変更なし → スキップ
     after = idx.stats()["chunks"]
     assert before == after
+    idx.close()
+
+
+def test_contextual_prefix_disabled_by_default():
+    idx = Index(":memory:")
+    assert idx.use_contextual_prefix is False
+    idx.close()
+
+
+def test_contextual_prefix_affects_search_content_not_original_snippet():
+    """有効時、FTS の検索対象(content)にはprefixが前置されるが、
+    スニペット表示用の original は元のチャンクテキストのまま。"""
+    with patch("httpx.post", return_value=_mock_ollama_response("これは概要説明です")):
+        idx = Index(":memory:", use_contextual_prefix=True)
+        idx.add_document("/x/ctx.md", "元のチャンクテキスト")
+
+    row = idx.conn.execute("SELECT content, original FROM chunks_fts").fetchone()
+    # content はトークナイズ済み（bigram等）のため部分文字列ではなくトークン単位で確認する
+    assert "概要" in row[0]
+    assert "元の" in row[0]
+    assert row[1] == "元のチャンクテキスト"
+    idx.close()
+
+
+def test_contextual_prefix_falls_back_gracefully_on_llm_failure():
+    """Ollama不達でも取り込み全体は失敗せず、prefix無しでインデックスされる。"""
+    import httpx
+
+    with patch("httpx.post", side_effect=httpx.ConnectError("接続失敗")):
+        idx = Index(":memory:", use_contextual_prefix=True)
+        idx.add_document("/x/ctx2.md", "フォールバック対象のテキスト")
+
+    row = idx.conn.execute("SELECT original FROM chunks_fts").fetchone()
+    assert row[0] == "フォールバック対象のテキスト"
     idx.close()
 
 
