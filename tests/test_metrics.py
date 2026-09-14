@@ -61,7 +61,6 @@ def test_metrics_no_auth_required(client, monkeypatch):
 
 def test_search_counter_increments(client, sample_dir):
     client.post("/index", json={"path": str(sample_dir)})
-    before = client.get("/metrics").text
 
     client.get("/search", params={"q": "メトリクス", "mode": "keyword"})
     after = client.get("/metrics").text

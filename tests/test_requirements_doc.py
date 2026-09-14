@@ -1,8 +1,12 @@
 """requirements_doc.py のテスト"""
+
 import pytest
-from pathlib import Path
+
 from searchengine.schema_gen.analyzer import analyze
-from searchengine.schema_gen.requirements_doc import render_requirements_md, render_requirements_xlsx
+from searchengine.schema_gen.requirements_doc import (
+    render_requirements_md,
+    render_requirements_xlsx,
+)
 
 
 def _make_rows(n=5):
@@ -68,6 +72,7 @@ class TestRenderRequirementsXlsx:
     def test_has_four_sheets(self, cols, tmp_path):
         pytest.importorskip("openpyxl")
         import openpyxl
+
         out = tmp_path / "req.xlsx"
         render_requirements_xlsx("test.csv", "orders", cols, 5, out)
         wb = openpyxl.load_workbook(out)
@@ -76,6 +81,7 @@ class TestRenderRequirementsXlsx:
     def test_column_names_in_sheet(self, cols, tmp_path):
         pytest.importorskip("openpyxl")
         import openpyxl
+
         out = tmp_path / "req.xlsx"
         render_requirements_xlsx("test.csv", "orders", cols, 5, out)
         wb = openpyxl.load_workbook(out)
@@ -86,6 +92,7 @@ class TestRenderRequirementsXlsx:
 
     def test_raises_import_error_without_openpyxl(self, cols, tmp_path, monkeypatch):
         import builtins
+
         real_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):

@@ -5,9 +5,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from searchengine import chunker, hybrid, query, tokenizer  # noqa: E402
-from searchengine.embedder import Embedder  # noqa: E402
-from searchengine.index import Index  # noqa: E402
+from searchengine import chunker, hybrid, query, tokenizer
+from searchengine.embedder import Embedder
+from searchengine.index import Index
 
 
 def test_tokenize_nonempty():

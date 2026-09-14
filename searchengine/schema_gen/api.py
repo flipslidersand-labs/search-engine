@@ -7,6 +7,7 @@
     GET  /schema/{table_name}  → スキーマ詳細取得
     DELETE /schema/{table_name} → スキーマ削除
 """
+
 from __future__ import annotations
 
 import os
@@ -16,11 +17,11 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from .analyzer import analyze, ColumnInfo
+from .analyzer import ColumnInfo, analyze
 from .ingest import load_file, load_sheets
-from .reporter import report_sql, report_er
+from .reporter import report_er, report_sql
 from .requirements_doc import render_requirements_md
-from .store import SchemaStore, SchemaMeta, SchemaDetail, ColumnHit
+from .store import SchemaStore
 
 _SCHEMA_DB: str = os.environ.get("SCHEMA_DB", "schemas.db")
 
@@ -121,7 +122,9 @@ def analyze_file(req: AnalyzeRequest) -> AnalyzeResponse:
         filename = f"sheets:{source_id[:12]}…"
         stem = source_id[:20]
     else:
-        raise HTTPException(status_code=400, detail="file_path または sheets_url を指定してください")
+        raise HTTPException(
+            status_code=400, detail="file_path または sheets_url を指定してください"
+        )
 
     if not rows:
         raise HTTPException(status_code=422, detail="データが空です")
@@ -131,13 +134,24 @@ def analyze_file(req: AnalyzeRequest) -> AnalyzeResponse:
 
     sql = report_sql(table_name, columns) if req.include_sql else None
     er_md = report_er(table_name, columns) if req.include_er else None
-    req_md = render_requirements_md(filename, table_name, columns, len(rows)) if req.include_req else None
+    req_md = (
+        render_requirements_md(filename, table_name, columns, len(rows))
+        if req.include_req
+        else None
+    )
 
     saved = False
     if req.save:
         store = _store()
-        store.save(table_name, filename, columns, len(rows),
-                   sql=sql or "", er_md=er_md or "", req_md=req_md or "")
+        store.save(
+            table_name,
+            filename,
+            columns,
+            len(rows),
+            sql=sql or "",
+            er_md=er_md or "",
+            req_md=req_md or "",
+        )
         saved = True
 
     return AnalyzeResponse(

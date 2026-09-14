@@ -5,19 +5,16 @@ Ollama への HTTP 呼び出しは unittest.mock.patch で差し替える。
 
 from __future__ import annotations
 
-import json
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from searchengine import ingest, server
+from searchengine import server
 from searchengine.index import Index
-from searchengine.llm import LLMResult, Message, OllamaClient
+from searchengine.llm import Message, OllamaClient
 from searchengine.rag import AskResult, Source, ask
-
 
 # ── フィクスチャ ──────────────────────────────────────────────────────────────
 
@@ -174,7 +171,9 @@ def test_ask_endpoint_empty_question(client):
 
 
 def test_ask_endpoint_custom_model(indexed_client):
-    with patch("httpx.post", return_value=_mock_ollama_response("カスタムモデルの回答")) as mock_post:
+    with patch(
+        "httpx.post", return_value=_mock_ollama_response("カスタムモデルの回答")
+    ) as mock_post:
         r = indexed_client.post(
             "/ask",
             json={"question": "テスト", "mode": "keyword", "model": "llama3:8b"},

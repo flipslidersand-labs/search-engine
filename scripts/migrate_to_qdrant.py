@@ -20,7 +20,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from searchengine.vector_store import (
     QDRANT_COLLECTION,
-    QDRANT_VECTOR_SIZE,
     QdrantVectorStore,
 )
 

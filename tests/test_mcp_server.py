@@ -12,7 +12,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from mcp import types
 
 from searchengine.mcp_server import TOOLS, create_server
@@ -119,9 +118,7 @@ def test_index_unknown_extension(tmp_path: Path, tmp_db: str):
 
 def test_search_keyword(indexed_db: str):
     """keyword モードで検索すると results が返る。"""
-    result = call_tool(
-        "search", {"query": "Python", "mode": "keyword", "db": indexed_db}
-    )
+    result = call_tool("search", {"query": "Python", "mode": "keyword", "db": indexed_db})
     assert result["mode"] == "keyword"
     assert result["query"] == "Python"
     assert isinstance(result["results"], list)
@@ -159,9 +156,7 @@ def test_unknown_tool_returns_error():
 
 def test_ask_returns_result_or_error(indexed_db: str):
     """Ollama 有無に関わらず、answer または error を含む JSON が返ること。"""
-    result = call_tool_raw(
-        "ask", {"question": "What is this doc about?", "db": indexed_db}
-    )
+    result = call_tool_raw("ask", {"question": "What is this doc about?", "db": indexed_db})
     payload = json.loads(result.content[0].text)
     if result.is_error:
         assert "error" in payload

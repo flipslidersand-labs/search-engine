@@ -3,9 +3,10 @@
 Markdown: 完全な要件定義書テンプレート（ヒアリングシート・機能一覧・非機能要件含む）
 Excel:    openpyxl で複数シート構成の要件定義書を生成
 """
+
 from __future__ import annotations
 
-from datetime import date
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .analyzer import ColumnInfo
@@ -13,12 +14,13 @@ from .er import detect_fk_candidates, detect_normalization_issues
 
 
 def _today() -> str:
-    return date.today().isoformat()
+    return datetime.now(tz=timezone.utc).date().isoformat()
 
 
 # ---------------------------------------------------------------------------
 # Markdown 出力
 # ---------------------------------------------------------------------------
+
 
 def render_requirements_md(
     filename: str,
@@ -26,7 +28,6 @@ def render_requirements_md(
     columns: list[ColumnInfo],
     row_count: int,
 ) -> str:
-    pk_cols = [c for c in columns if c.pk_candidate]
     nullable_cols = [c for c in columns if c.null_pct > 0]
     fk_relations = detect_fk_candidates(columns, table_name)
     norm_hints = detect_normalization_issues(columns)
@@ -44,11 +45,11 @@ def render_requirements_md(
         "",
         "| 項目 | 内容 |",
         "|---|---|",
-        f"| システム名 | （記入） |",
+        "| システム名 | （記入） |",
         f"| 対象テーブル | `{table_name}` |",
         f"| 作成日 | {today} |",
-        f"| 作成者 | （記入） |",
-        f"| バージョン | 0.1 |",
+        "| 作成者 | （記入） |",
+        "| バージョン | 0.1 |",
         "",
         "### 背景・目的",
         "",
@@ -121,7 +122,9 @@ def render_requirements_md(
 
     for c in columns:
         null_rule = "任意" if c.null_pct > 0 else "必須"
-        type_hint = "数値のみ" if "INT" in c.inferred_type or "NUMERIC" in c.inferred_type else "文字列"
+        type_hint = (
+            "数値のみ" if "INT" in c.inferred_type or "NUMERIC" in c.inferred_type else "文字列"
+        )
         lines.append(f"| `{c.name}` | {null_rule} / {type_hint} | （記入） |")
 
     lines += [
@@ -150,7 +153,9 @@ def render_requirements_md(
         lines.append("### 任意項目の扱い")
         lines.append("")
         for c in nullable_cols:
-            lines.append(f"- [ ] `{c.name}`（NULL率 {c.null_pct}%）— 空になるケースは？必須化できるか？")
+            lines.append(
+                f"- [ ] `{c.name}`（NULL率 {c.null_pct}%）— 空になるケースは？必須化できるか？"
+            )
         lines.append("")
 
     if norm_hints:
@@ -191,6 +196,7 @@ def render_requirements_md(
 # Excel 出力
 # ---------------------------------------------------------------------------
 
+
 def render_requirements_xlsx(
     filename: str,
     table_name: str,
@@ -200,8 +206,6 @@ def render_requirements_xlsx(
 ) -> None:
     try:
         import openpyxl
-        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-        from openpyxl.utils import get_column_letter
     except ImportError:
         raise ImportError("openpyxl が必要です: pip install openpyxl")
 
@@ -235,16 +239,18 @@ def render_requirements_xlsx(
     ws2.append(headers)
     _style_header(ws2, 1, len(headers))
     for i, c in enumerate(columns, 1):
-        ws2.append([
-            i,
-            c.name,
-            c.inferred_type,
-            f"{c.null_pct}%",
-            f"{c.unique_pct}%",
-            "✅" if c.pk_candidate else "",
-            ", ".join(c.sample_values[:3]),
-            "",
-        ])
+        ws2.append(
+            [
+                i,
+                c.name,
+                c.inferred_type,
+                f"{c.null_pct}%",
+                f"{c.unique_pct}%",
+                "✅" if c.pk_candidate else "",
+                ", ".join(c.sample_values[:3]),
+                "",
+            ]
+        )
     for col, width in zip("ABCDEFGH", [4, 28, 20, 10, 10, 8, 30, 30]):
         ws2.column_dimensions[col].width = width
 
@@ -252,7 +258,15 @@ def render_requirements_xlsx(
     ws3 = wb.create_sheet("機能要件")
     ws3.append(["操作", "必須", "条件・補足"])
     _style_header(ws3, 1, 3)
-    for op in ["新規登録", "一覧表示", "詳細表示", "編集・更新", "削除", "一括インポート", "エクスポート"]:
+    for op in [
+        "新規登録",
+        "一覧表示",
+        "詳細表示",
+        "編集・更新",
+        "削除",
+        "一括インポート",
+        "エクスポート",
+    ]:
         ws3.append([op, "☐", ""])
     ws3.append([])
     ws3.append(["カラム", "検索方式", "必須"])
@@ -267,7 +281,6 @@ def render_requirements_xlsx(
     ws4 = wb.create_sheet("ヒアリング")
     ws4.append(["確認項目", "回答", "担当", "期限"])
     _style_header(ws4, 1, 4)
-    fk_relations = detect_fk_candidates(columns, table_name)
     norm_hints = detect_normalization_issues(columns)
     nullable_cols = [c for c in columns if c.null_pct > 0]
     for c in nullable_cols:
@@ -283,6 +296,8 @@ def render_requirements_xlsx(
 
 
 def _header_row(ws, row: int, title: str, subtitle: str = "") -> None:
+    from openpyxl.styles import Font
+
     ws.cell(row=row, column=1, value=title).font = Font(bold=True, size=14)
     if subtitle:
         ws.cell(row=row, column=2, value=subtitle)
@@ -291,6 +306,7 @@ def _header_row(ws, row: int, title: str, subtitle: str = "") -> None:
 def _style_header(ws, row: int, ncols: int) -> None:
     try:
         from openpyxl.styles import Font, PatternFill
+
         fill = PatternFill("solid", fgColor="4472C4")
         font = Font(bold=True, color="FFFFFF")
         for col in range(1, ncols + 1):
