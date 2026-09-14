@@ -84,6 +84,7 @@ class TestSchemaStore:
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("SCHEMA_DB", str(tmp_path / "test.db"))
+    monkeypatch.setenv("ALLOWED_INDEX_DIRS", str(tmp_path))
     import searchengine.schema_gen.api as api_mod
 
     # SCHEMA_DB を再読込
@@ -130,9 +131,13 @@ class TestAnalyzeEndpoint:
         res = client.post("/schema/analyze", json={"file_path": sample_csv, "include_sql": True})
         assert "CREATE TABLE" in res.json()["sql"]
 
-    def test_analyze_missing_file(self, client):
-        res = client.post("/schema/analyze", json={"file_path": "/nonexistent/file.csv"})
+    def test_analyze_missing_file(self, client, tmp_path):
+        res = client.post("/schema/analyze", json={"file_path": str(tmp_path / "nonexistent.csv")})
         assert res.status_code == 400
+
+    def test_analyze_rejects_path_outside_allowed_dirs(self, client):
+        res = client.post("/schema/analyze", json={"file_path": "/etc/passwd"})
+        assert res.status_code == 403
 
     def test_analyze_no_source(self, client):
         res = client.post("/schema/analyze", json={})
@@ -179,3 +184,21 @@ class TestGetAndDeleteEndpoints:
     def test_delete_missing(self, client):
         res = client.delete("/schema/nonexistent")
         assert res.status_code == 404
+
+
+class TestSchemaAuth:
+    """/schema/* が他エンドポイントと同様に API_KEY を要求すること（#89 回帰テスト）。"""
+
+    def test_analyze_requires_api_key_when_set(self, client, sample_csv, monkeypatch):
+        monkeypatch.setenv("API_KEY", "secret-key")
+        res = client.post("/schema/analyze", json={"file_path": sample_csv})
+        assert res.status_code == 401
+
+    def test_analyze_succeeds_with_correct_api_key(self, client, sample_csv, monkeypatch):
+        monkeypatch.setenv("API_KEY", "secret-key")
+        res = client.post(
+            "/schema/analyze",
+            json={"file_path": sample_csv},
+            headers={"X-API-Key": "secret-key"},
+        )
+        assert res.status_code == 200

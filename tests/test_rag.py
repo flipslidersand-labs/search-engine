@@ -184,17 +184,44 @@ def test_ask_endpoint_custom_model(indexed_client):
     assert call_payload["model"] == "llama3:8b"
 
 
-def test_ask_endpoint_custom_ollama_url(indexed_client):
+def test_ask_endpoint_custom_ollama_url(indexed_client, monkeypatch):
+    monkeypatch.setenv("ALLOWED_OLLAMA_HOSTS", "example.internal:11434")
     with patch("httpx.post", return_value=_mock_ollama_response("回答")) as mock_post:
         r = indexed_client.post(
             "/ask",
             json={
                 "question": "テスト",
                 "mode": "keyword",
-                "ollama_url": "http://<internal-host>:11434",
+                "ollama_url": "http://example.internal:11434",
             },
         )
 
     assert r.status_code == 200
     called_url = mock_post.call_args[0][0]
-    assert "<internal-host>" in called_url
+    assert "example.internal" in called_url
+
+
+def test_ask_endpoint_rejects_ollama_url_without_allowlist(indexed_client, monkeypatch):
+    monkeypatch.delenv("ALLOWED_OLLAMA_HOSTS", raising=False)
+    r = indexed_client.post(
+        "/ask",
+        json={
+            "question": "テスト",
+            "mode": "keyword",
+            "ollama_url": "http://169.254.169.254",
+        },
+    )
+    assert r.status_code == 403
+
+
+def test_ask_endpoint_rejects_ollama_url_outside_allowlist(indexed_client, monkeypatch):
+    monkeypatch.setenv("ALLOWED_OLLAMA_HOSTS", "example.internal:11434")
+    r = indexed_client.post(
+        "/ask",
+        json={
+            "question": "テスト",
+            "mode": "keyword",
+            "ollama_url": "http://169.254.169.254",
+        },
+    )
+    assert r.status_code == 403
