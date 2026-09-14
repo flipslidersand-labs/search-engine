@@ -64,7 +64,7 @@ app = FastAPI(
     description="BM25 + ベクトル ハイブリッド検索 API",
     version="0.4.0",
 )
-app.include_router(schema_router)
+app.include_router(schema_router, dependencies=[Depends(require_api_key)])
 
 # ── スキーマ ──────────────────────────────────────────────────────────────────
 
@@ -173,6 +173,26 @@ def _validate_path(path: str) -> None:
         if d and resolved.is_relative_to(Path(d).resolve()):
             return
     raise HTTPException(status_code=403, detail=f"許可されていないパス: {path}")
+
+
+def _validate_ollama_url(url: str) -> None:
+    """リクエスト側指定の ollama_url を ALLOWED_OLLAMA_HOSTS の範囲外なら 403 で拒否する（SSRF対策）。
+
+    未設定時は環境変数 OLLAMA_URL のデフォルト値のみ暗黙に許可し、リクエストからの
+    上書き自体を拒否する（fail-closed）。
+    """
+    from urllib.parse import urlparse
+
+    allowed_raw = os.environ.get("ALLOWED_OLLAMA_HOSTS", "")
+    if not allowed_raw:
+        raise HTTPException(
+            status_code=403,
+            detail="ollama_url の上書きは許可されていません（ALLOWED_OLLAMA_HOSTS 未設定）",
+        )
+    host = urlparse(url).netloc
+    allowed_hosts = {h.strip() for h in allowed_raw.split(",") if h.strip()}
+    if host not in allowed_hosts:
+        raise HTTPException(status_code=403, detail=f"許可されていない ollama_url: {url}")
 
 
 @app.post("/index", response_model=IndexResponse, dependencies=[Depends(require_api_key)])
@@ -290,6 +310,8 @@ def ask(req: AskRequest) -> AskResponse:
 
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="question が空です")
+    if req.ollama_url:
+        _validate_ollama_url(req.ollama_url)
 
     want_vector = req.mode in ("vector", "hybrid")
     idx = _open_index(req.db, want_vector=want_vector)
