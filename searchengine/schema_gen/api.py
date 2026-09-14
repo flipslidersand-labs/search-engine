@@ -95,6 +95,19 @@ class SearchResponse(BaseModel):
 # ── ヘルパー ──────────────────────────────────────────────────────────────────
 
 
+def _validate_path(path: str) -> None:
+    """ALLOWED_INDEX_DIRS の範囲外パスを 403 で拒否する（server.py の /index と同じ規約）。"""
+    allowed_raw = os.environ.get("ALLOWED_INDEX_DIRS", "")
+    if not allowed_raw:
+        raise HTTPException(status_code=403, detail="ALLOWED_INDEX_DIRS が未設定です")
+    resolved = Path(path).resolve()
+    for d in allowed_raw.split(":"):
+        d = d.strip()
+        if d and resolved.is_relative_to(Path(d).resolve()):
+            return
+    raise HTTPException(status_code=403, detail=f"許可されていないパス: {path}")
+
+
 def _col_out(c: ColumnInfo) -> ColumnInfoOut:
     return ColumnInfoOut(
         name=c.name,
@@ -113,11 +126,14 @@ def _col_out(c: ColumnInfo) -> ColumnInfoOut:
 def analyze_file(req: AnalyzeRequest) -> AnalyzeResponse:
     """CSV / Excel / Google Sheets を解析してスキーマを返す。save=true で DB に保存。"""
     if req.file_path:
+        _validate_path(req.file_path)
         if not Path(req.file_path).exists():
             raise HTTPException(status_code=400, detail=f"ファイルが存在しません: {req.file_path}")
         rows, filename = load_file(req.file_path, req.sheet)
         stem = Path(req.file_path).stem
     elif req.sheets_url:
+        if req.credentials:
+            _validate_path(req.credentials)
         rows, source_id = load_sheets(req.sheets_url, req.sheet, req.credentials)
         filename = f"sheets:{source_id[:12]}…"
         stem = source_id[:20]
