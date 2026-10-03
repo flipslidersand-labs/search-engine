@@ -24,10 +24,10 @@ class TestExtractSpreadsheetId:
 class TestLoadSheet:
     def _mock_service(self, values):
         service = MagicMock()
-        (service.spreadsheets().get().execute.return_value) = {
+        service.spreadsheets().get().execute.return_value = {
             "sheets": [{"properties": {"title": "Sheet1"}}]
         }
-        (service.spreadsheets().values().get().execute.return_value) = {"values": values}
+        service.spreadsheets().values().get().execute.return_value = {"values": values}
         return service
 
     @patch("searchengine.schema_gen.sheets._build_service")
@@ -56,7 +56,7 @@ class TestLoadSheet:
     @patch("searchengine.schema_gen.sheets._build_service")
     def test_empty_sheet(self, mock_build):
         svc = self._mock_service([])
-        (svc.spreadsheets().values().get().execute.return_value) = {"values": []}
+        svc.spreadsheets().values().get().execute.return_value = {"values": []}
         mock_build.return_value = svc
         rows = load_sheet("FAKE_ID")
         assert rows == []
