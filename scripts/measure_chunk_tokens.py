@@ -82,8 +82,8 @@ def main() -> int:
     n = len(lens)
     print(f"files={files} chunks={n} size={args.size} overlap={args.overlap}")
     print(
-        f"tokens: mean={statistics.mean(lens):.0f} p50={_percentile(lens, .5)} "
-        f"p95={_percentile(lens, .95)} max={lens[-1]}"
+        f"tokens: mean={statistics.mean(lens):.0f} p50={_percentile(lens, 0.5)} "
+        f"p95={_percentile(lens, 0.95)} max={lens[-1]}"
     )
     print(f">{MAX_SEQ} tokens (prefixなし):            {over}/{n} = {over / n:.1%}")
     print(
