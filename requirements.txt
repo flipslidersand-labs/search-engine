@@ -1,3 +1,7 @@
+# 再現可能なインストールには requirements.lock.txt を使うこと:
+#   pip install -r requirements.lock.txt
+# 更新時は `pip-compile requirements.txt -o requirements.lock.txt` で再生成する。
+#
 # Phase 1 (MVP) は stdlib (sqlite3) のみで動作する。
 # 形態素解析の精度を上げる場合は以下を導入（任意）:
 # fugashi[unidic-lite]   # 軽量な MeCab バインディング
