@@ -84,6 +84,11 @@ class Index:
         if self.vectors is not None:
             self.vectors.delete_doc(doc_id)
         chunks = chunker.chunk_text(text)
+        if self.embedder is not None:
+            # ベクトル索引時のみ: prefix 込みで e5 の512 tokens上限に収める (#95)。
+            # FTS のみの索引ではチャンク分割を変えない（検索結果への影響を避ける）。
+            reserve = chunker.MAX_CONTEXT_TOKENS if self.use_contextual_prefix else 0
+            chunks = chunker.split_to_token_budget(chunks, chunker.EMBED_TOKEN_BUDGET - reserve)
         search_chunks = (
             add_context(text, chunks) if (self.use_contextual_prefix and chunks) else chunks
         )
