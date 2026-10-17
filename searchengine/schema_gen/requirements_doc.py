@@ -6,7 +6,7 @@ Excel:    openpyxl で複数シート構成の要件定義書を生成
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .analyzer import ColumnInfo
@@ -14,7 +14,7 @@ from .er import detect_fk_candidates, detect_normalization_issues
 
 
 def _today() -> str:
-    return datetime.now(tz=timezone.utc).date().isoformat()
+    return datetime.now(tz=UTC).date().isoformat()
 
 
 # ---------------------------------------------------------------------------
