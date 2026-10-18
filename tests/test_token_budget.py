@@ -65,6 +65,20 @@ def test_truncate_to_tokens_boundary():
     assert truncate_to_tokens("短い", 50) == "短い"
 
 
+@pytest.mark.parametrize("text", ["あ" * 5000, "ab " * 3000, "a、b。" * 2000, "漢字abc,def " * 800, "x" * 5000])
+def test_truncate_returns_longest_prefix_within_budget(text):
+    t = truncate_to_tokens(text, 440)
+    assert estimate_tokens(t) <= 440
+    assert len(t) == len(text) or estimate_tokens(text[: len(t) + 1]) > 440
+
+
+def test_split_long_cjk_run_stays_within_budget_and_keeps_content():
+    text = "あ" * 5000
+    out = split_to_token_budget([Chunk(0, text)])
+    assert all(estimate_tokens(c.text) <= EMBED_TOKEN_BUDGET for c in out)
+    assert "".join(c.text for c in out) == text
+
+
 def test_generate_context_caps_prefix_length():
     m = MagicMock()
     m.raise_for_status = MagicMock()

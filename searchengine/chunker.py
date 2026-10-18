@@ -27,6 +27,7 @@ MAX_CONTEXT_TOKENS = 100
 _CJK = re.compile(r"[぀-ヿ㐀-鿿＀-￯]")
 _WORD = re.compile(r"[A-Za-z0-9]+")
 _PUNCT = re.compile(r"[^\sA-Za-z0-9]")
+_TOKEN = re.compile(rf"(?P<cjk>{_CJK.pattern})|(?P<word>[A-Za-z0-9]+)|(?P<punct>[^\sA-Za-z0-9])")
 _SENTENCE = re.compile(r"[^。！？!?\n]*?(?:[。！？!?\n]|\.(?=\s))|[^。！？!?\n]+$")
 
 
@@ -44,17 +45,13 @@ def estimate_tokens(text: str) -> int:
 
 
 def truncate_to_tokens(text: str, budget: int) -> str:
-    """推定 tokens が budget 以下になる最長の先頭部分を返す。"""
-    if estimate_tokens(text) <= budget:
-        return text
-    lo, hi = 0, len(text)
-    while lo < hi:  # 推定値は文字を足すと単調非減少
-        mid = (lo + hi + 1) // 2
-        if estimate_tokens(text[:mid]) <= budget:
-            lo = mid
-        else:
-            hi = mid - 1
-    return text[:lo]
+    """推定 tokens が budget 以下になる最長の先頭部分を返す（1 パス・長さに比例）。"""
+    used = 0
+    for m in _TOKEN.finditer(text):
+        used += 2 if m.lastgroup == "word" else 1
+        if used > budget:
+            return text[: m.start()]
+    return text
 
 
 def _pieces(text: str, budget: int) -> list[str]:
