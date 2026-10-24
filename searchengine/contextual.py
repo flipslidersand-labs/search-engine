@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 
-from .chunker import Chunk
+from .chunker import MAX_CONTEXT_TOKENS, Chunk, truncate_to_tokens
 from .llm import Message, OllamaClient
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,8 @@ def generate_context(
     prompt = _PROMPT_TEMPLATE.format(document=document, chunk=chunk_text)
     try:
         result = client.chat([Message(role="user", content=prompt)])
-        text = result.content.strip()
+        # 合計が e5 の512 tokens上限を超えないよう prefix は推定100 tokensで打ち切る (#95)
+        text = truncate_to_tokens(result.content.strip(), MAX_CONTEXT_TOKENS)
         return text or None
     except Exception as e:
         logger.warning("contextual prefix生成に失敗、prefixなしで続行: %s", e)
