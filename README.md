@@ -52,6 +52,14 @@ Storage: SQLite (FTS5 + BLOB vectors) / Qdrant (optional)
 
 ---
 
+## Design decisions / 設計判断（ADR）
+
+- [RRF for hybrid search](docs/adr/ADR-001-rrf-for-hybrid-search.md) — 統合に RRF（k=60）
+- [Vector store abstraction](docs/adr/ADR-002-vector-store-abstraction.md) — SQLite と Qdrant を切り替え可能に
+- [`ALLOWED_INDEX_DIRS` required](docs/adr/ADR-003-allowed-index-dirs-required.md) — `/index` の許可ディレクトリを必須に
+
+---
+
 ## Quick Start / クイックスタート
 
 ```bash
