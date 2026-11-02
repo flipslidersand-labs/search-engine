@@ -67,10 +67,14 @@ if _HAS_PROMETHEUS:
         "RAG (/ask) request latency",
         buckets=_LATENCY_BUCKETS,
     )
+else:
+    SEARCH_REQUESTS = SEARCH_LATENCY = INDEX_REQUESTS = None
+    RAG_REQUESTS = RAG_LATENCY = None
 
 
 @contextmanager
-def track_search(mode: str) -> Generator[None, None, None]:
+def _track(counter, histogram=None, **labels: str) -> Generator[None, None, None]:
+    """リクエスト数(status 付き)と任意でレイテンシを記録する共通 context manager。"""
     if not _HAS_PROMETHEUS:
         yield
         return
@@ -82,42 +86,23 @@ def track_search(mode: str) -> Generator[None, None, None]:
         status = "error"
         raise
     finally:
-        elapsed = time.perf_counter() - start
-        SEARCH_REQUESTS.labels(mode=mode, status=status).inc()
-        SEARCH_LATENCY.labels(mode=mode).observe(elapsed)
+        counter.labels(**labels, status=status).inc()
+        if histogram is not None:
+            (histogram.labels(**labels) if labels else histogram).observe(
+                time.perf_counter() - start
+            )
 
 
-@contextmanager
-def track_index() -> Generator[None, None, None]:
-    if not _HAS_PROMETHEUS:
-        yield
-        return
-    status = "success"
-    try:
-        yield
-    except Exception:
-        status = "error"
-        raise
-    finally:
-        INDEX_REQUESTS.labels(status=status).inc()
+def track_search(mode: str):
+    return _track(SEARCH_REQUESTS, SEARCH_LATENCY, mode=mode)
 
 
-@contextmanager
-def track_rag() -> Generator[None, None, None]:
-    if not _HAS_PROMETHEUS:
-        yield
-        return
-    start = time.perf_counter()
-    status = "success"
-    try:
-        yield
-    except Exception:
-        status = "error"
-        raise
-    finally:
-        elapsed = time.perf_counter() - start
-        RAG_REQUESTS.labels(status=status).inc()
-        RAG_LATENCY.observe(elapsed)
+def track_index():
+    return _track(INDEX_REQUESTS)
+
+
+def track_rag():
+    return _track(RAG_REQUESTS, RAG_LATENCY)
 
 
 def update_index_gauges(documents: int, chunks: int) -> None:
