@@ -65,7 +65,9 @@ def test_truncate_to_tokens_boundary():
     assert truncate_to_tokens("短い", 50) == "短い"
 
 
-@pytest.mark.parametrize("text", ["あ" * 5000, "ab " * 3000, "a、b。" * 2000, "漢字abc,def " * 800, "x" * 5000])
+@pytest.mark.parametrize(
+    "text", ["あ" * 5000, "ab " * 3000, "a、b。" * 2000, "漢字abc,def " * 800, "x" * 5000]
+)
 def test_truncate_returns_longest_prefix_within_budget(text):
     t = truncate_to_tokens(text, 440)
     assert estimate_tokens(t) <= 440
