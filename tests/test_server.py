@@ -75,6 +75,26 @@ def test_index(client, sample_dir):
     assert data["chunks"] >= 2
 
 
+def test_index_continues_after_one_file_fails(client, sample_dir, monkeypatch):
+    # 1ファイルの失敗でバッチ全体を止めず、失敗件数を返す (#113)
+    from searchengine import ingest
+
+    real = ingest.read_text
+
+    def flaky(path: str) -> str:
+        if path.endswith("a.txt"):
+            raise OSError("読めない")
+        return real(path)
+
+    monkeypatch.setattr(ingest, "read_text", flaky)
+    r = client.post("/index", json={"path": str(sample_dir)})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["indexed"] == 1
+    assert data["failed"] == 1
+    assert data["documents"] == 1
+
+
 def test_index_nonexistent_path(client, tmp_path, monkeypatch):
     monkeypatch.setenv("ALLOWED_INDEX_DIRS", str(tmp_path))
     r = client.post("/index", json={"path": str(tmp_path / "nonexistent_xyz")})
