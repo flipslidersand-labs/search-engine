@@ -4,6 +4,8 @@ import os
 import sys
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from searchengine import chunker, hybrid, query, tokenizer
@@ -54,6 +56,54 @@ def test_incremental_skip():
     after = idx.stats()["chunks"]
     assert before == after
     idx.close()
+
+
+class _FailOnce:
+    """encode が1回だけ失敗する Embedder（バックエンド一時障害の再現）。"""
+
+    def __init__(self) -> None:
+        self._inner = Embedder()
+        self.dim = self._inner.dim
+        self.fail = False
+
+    @property
+    def backend(self) -> str:
+        return self._inner.backend
+
+    def encode(self, texts, mode="index"):
+        if self.fail:
+            raise RuntimeError("embedding backend down")
+        return self._inner.encode(texts, mode)
+
+
+def test_add_document_encode_failure_rolls_back_and_keeps_old_index():
+    # encode 失敗で例外が出ても、旧チャンクの削除・新 FTS 行の挿入は残らない。
+    # 残ると、次のファイルの commit() に巻き込まれて半端な状態が確定する (#90)。
+    emb = _FailOnce()
+    idx = Index(":memory:", embedder=emb)
+    idx.add_document("/x/a.md", "旧バージョンの本文は機械学習について述べる。")
+    old = idx.conn.execute("SELECT original FROM chunks_fts WHERE doc_id=?", (_doc("/x/a.md"),))
+    old_texts = [r[0] for r in old.fetchall()]
+    assert old_texts
+
+    emb.fail = True
+    with pytest.raises(RuntimeError):
+        idx.add_document("/x/a.md", "新バージョンの本文は全く別の話題である。")
+    emb.fail = False
+    idx.add_document(
+        "/x/b.md", "別のファイルは問題なく取り込まれる。"
+    )  # この commit に巻き込まれない
+
+    now = idx.conn.execute("SELECT original FROM chunks_fts WHERE doc_id=?", (_doc("/x/a.md"),))
+    assert [r[0] for r in now.fetchall()] == old_texts
+    assert idx.vector_search("機械学習", limit=5), "旧ベクトルが消えている"
+    idx.close()
+
+
+def _doc(path: str) -> str:
+    from searchengine.index import _doc_id
+
+    return _doc_id(path)
 
 
 def test_contextual_prefix_disabled_by_default():
