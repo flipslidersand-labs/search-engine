@@ -110,6 +110,25 @@ def test_allowed_docs_filter(store):
     assert all(h.doc_id == "docA" for h in hits)
 
 
+# ── 次元不一致（#90）────────────────────────────────────────────────────────
+
+
+def test_search_skips_vectors_of_other_dimension(store):
+    store.upsert("same", 0, _vec(dim=4, seed=1))
+    store.upsert("other", 0, _vec(dim=8, seed=1))  # 別モデルで埋め込まれた行
+    store.conn.commit()
+
+    hits = store.search(_vec(dim=4, seed=1), limit=10)
+    assert [h.doc_id for h in hits] == ["same"]
+
+
+def test_search_returns_empty_when_no_vector_has_query_dimension(store):
+    store.upsert("other", 0, _vec(dim=8, seed=1))
+    store.conn.commit()
+
+    assert store.search(_vec(dim=4, seed=1), limit=10) == []
+
+
 # ── ファクトリ ────────────────────────────────────────────────────────────────
 
 

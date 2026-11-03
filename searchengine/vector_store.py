@@ -14,12 +14,15 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import sqlite3
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 try:
     from qdrant_client import QdrantClient
@@ -105,12 +108,21 @@ class SqliteVectorStore:
         allowed_docs: set[str] | None = None,
     ) -> list[VHit]:
         rows = self.conn.execute("SELECT doc_id, chunk_index, vec FROM vectors").fetchall()
-        keys, mats = [], []
+        dim = np.asarray(query_vec).shape[0]
+        keys, mats, skipped = [], [], 0
         for doc_id, ci, blob in rows:
             if allowed_docs is not None and doc_id not in allowed_docs:
                 continue
+            v = np.frombuffer(blob, dtype=np.float32)
+            if v.shape[0] != dim:  # 別モデルで埋め込まれた行は比較できない
+                skipped += 1
+                continue
             keys.append((doc_id, ci))
-            mats.append(np.frombuffer(blob, dtype=np.float32))
+            mats.append(v)
+        if skipped:
+            logger.warning(
+                "次元が異なる %d 件のベクトルを検索から除外（クエリ dim=%d）", skipped, dim
+            )
         if not mats:
             return []
         mat = np.vstack(mats)
