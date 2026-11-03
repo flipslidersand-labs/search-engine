@@ -78,7 +78,18 @@ class Index:
         row = self.conn.execute("SELECT hash FROM documents WHERE doc_id = ?", (doc_id,)).fetchone()
         if row and row[0] == h:
             return doc_id  # 変更なし → スキップ
+        try:
+            self._replace_document(doc_id, path, text, doc_type, mtime, h)
+        except BaseException:
+            # encode 失敗等で未コミットの DELETE/INSERT が残ると、次の add_document の
+            # commit に巻き込まれて半端な状態が確定する (#90)。
+            self.conn.rollback()
+            raise
+        return doc_id
 
+    def _replace_document(
+        self, doc_id: str, path: str, text: str, doc_type: str, mtime: float | None, h: str
+    ) -> None:
         # 旧チャンクを削除してから再投入（更新 = DELETE→INSERT）
         self.conn.execute("DELETE FROM chunks_fts WHERE doc_id = ?", (doc_id,))
         if self.vectors is not None:
@@ -111,7 +122,6 @@ class Index:
             (doc_id, path, doc_type, mtime, h),
         )
         self.conn.commit()
-        return doc_id
 
     def remove_document(self, path: str) -> None:
         doc_id = _doc_id(path)
