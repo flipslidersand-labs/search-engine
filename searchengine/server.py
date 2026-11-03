@@ -75,7 +75,6 @@ app.include_router(schema_router, dependencies=[Depends(require_api_key)])
 class IndexRequest(BaseModel):
     path: str
     vector: bool = False
-    db: str | None = None
 
 
 class IndexResponse(BaseModel):
@@ -122,7 +121,6 @@ class AskRequest(BaseModel):
     model: str = "qwen2.5:7b"
     top_k: int = 5
     ollama_url: str | None = None
-    db: str | None = None
 
 
 class AskResponse(BaseModel):
@@ -135,8 +133,8 @@ class AskResponse(BaseModel):
 # ── ヘルパー ──────────────────────────────────────────────────────────────────
 
 
-def _open_index(db: str | None, *, want_vector: bool = False) -> Index:
-    db_path = db or _DB_PATH
+def _open_index(*, want_vector: bool = False) -> Index:
+    db_path = _DB_PATH
     embedder = None
     if want_vector:
         from .embedder import Embedder
@@ -207,7 +205,7 @@ def index_files(req: IndexRequest) -> IndexResponse:
     if not target.exists():
         raise HTTPException(status_code=400, detail=f"パスが存在しません: {req.path}")
 
-    idx = _open_index(req.db, want_vector=req.vector)
+    idx = _open_index(want_vector=req.vector)
     count = failed = 0
     with track_index():
         try:
@@ -245,7 +243,6 @@ def search(
     q: str = Query(..., description="検索クエリ"),
     mode: Literal["keyword", "vector", "hybrid", "nugget"] = Query("keyword"),
     n: int = Query(10, ge=1, le=100),
-    db: str | None = Query(None),
     nuggets_per_chunk: int = Query(3, ge=1, le=10, description="nugget モードで抽出する文数"),
 ) -> SearchResponse:
     """クエリを検索して上位 n 件を返す。"""
@@ -253,7 +250,7 @@ def search(
         raise HTTPException(status_code=400, detail="クエリが空です")
 
     want_vector = mode in ("vector", "hybrid", "nugget")
-    idx = _open_index(db, want_vector=want_vector)
+    idx = _open_index(want_vector=want_vector)
     parsed = query.parse(q)
 
     with track_search(mode):
@@ -294,9 +291,9 @@ def search(
 
 
 @app.get("/stats", response_model=StatsResponse, dependencies=[Depends(require_api_key)])
-def stats(db: str | None = Query(None)) -> StatsResponse:
+def stats() -> StatsResponse:
     """インデックスの統計情報を返す。"""
-    idx = _open_index(db)
+    idx = _open_index()
     try:
         s = idx.stats()
     finally:
@@ -305,7 +302,7 @@ def stats(db: str | None = Query(None)) -> StatsResponse:
         documents=s["documents"],
         chunks=s["chunks"],
         tokenizer=tokenizer.backend(),
-        db=db or _DB_PATH,
+        db=_DB_PATH,
     )
 
 
@@ -324,7 +321,7 @@ def ask(req: AskRequest) -> AskResponse:
         _validate_ollama_url(req.ollama_url)
 
     want_vector = req.mode in ("vector", "hybrid")
-    idx = _open_index(req.db, want_vector=want_vector)
+    idx = _open_index(want_vector=want_vector)
     with track_rag():
         try:
             result = rag_module.ask(
