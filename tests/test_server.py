@@ -95,6 +95,19 @@ def test_index_continues_after_one_file_fails(client, sample_dir, monkeypatch):
     assert data["documents"] == 1
 
 
+def test_http_api_ignores_db_param(client, sample_dir, tmp_db, tmp_path):
+    # 任意パスの DB を開ける db パラメータは HTTP API から廃止 (#91)。
+    # 渡されても無視され、指定パスにファイルは作られない。
+    other = tmp_path / "elsewhere" / "other.db"
+    other.parent.mkdir()
+    client.post("/index", json={"path": str(sample_dir), "db": str(other)})
+    client.get("/search", params={"q": "機械学習", "db": str(other)})
+    r = client.get("/stats", params={"db": str(other)})
+    assert not other.exists()
+    assert r.json()["db"] == tmp_db
+    assert r.json()["documents"] == 2  # 既定 DB に取り込まれている
+
+
 def test_index_nonexistent_path(client, tmp_path, monkeypatch):
     monkeypatch.setenv("ALLOWED_INDEX_DIRS", str(tmp_path))
     r = client.post("/index", json={"path": str(tmp_path / "nonexistent_xyz")})
