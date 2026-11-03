@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 from pathlib import Path
 from typing import Literal
@@ -39,6 +40,8 @@ from .metrics import (
     update_index_gauges,
 )
 from .schema_gen.api import router as schema_router
+
+logger = logging.getLogger(__name__)
 
 # ── DB パス（起動時に差し替え可） ────────────────────────────────────────────
 _DB_PATH: str = os.environ.get("SEARCH_DB", "search.db")
@@ -81,6 +84,7 @@ class IndexResponse(BaseModel):
     chunks: int
     tokenizer: str
     embedder: str | None = None
+    failed: int = 0
 
 
 class SearchHit(BaseModel):
@@ -204,17 +208,22 @@ def index_files(req: IndexRequest) -> IndexResponse:
         raise HTTPException(status_code=400, detail=f"パスが存在しません: {req.path}")
 
     idx = _open_index(req.db, want_vector=req.vector)
-    count = 0
+    count = failed = 0
     with track_index():
         try:
             for path in ingest.iter_files(str(target)):
-                text = ingest.read_text(path)
-                idx.add_document(
-                    path,
-                    text,
-                    doc_type=ingest.detect_type(path) or "text",
-                    mtime=os.path.getmtime(path),
-                )
+                try:
+                    text = ingest.read_text(path)
+                    idx.add_document(
+                        path,
+                        text,
+                        doc_type=ingest.detect_type(path) or "text",
+                        mtime=os.path.getmtime(path),
+                    )
+                except Exception:  # 1ファイルの失敗で後続を止めない (#113)
+                    logger.exception("インデックス失敗: %s", path)
+                    failed += 1
+                    continue
                 count += 1
             s = idx.stats()
         finally:
@@ -227,6 +236,7 @@ def index_files(req: IndexRequest) -> IndexResponse:
         chunks=s["chunks"],
         tokenizer=tokenizer.backend(),
         embedder=idx.embedder.backend if idx.embedder else None,
+        failed=failed,
     )
 
 
