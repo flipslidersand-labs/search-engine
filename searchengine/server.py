@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import secrets
 from pathlib import Path
 from typing import Literal
 
@@ -51,9 +52,30 @@ _DB_PATH: str = os.environ.get("SEARCH_DB", "search.db")
 _API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
+def _allow_no_auth() -> bool:
+    return os.environ.get("ALLOW_NO_AUTH") == "1"
+
+
+def warn_if_unauthenticated() -> None:
+    """API_KEY 未設定の起動時に警告を出す。"""
+    if os.environ.get("API_KEY"):
+        return
+    if _allow_no_auth():
+        logger.warning("API_KEY 未設定かつ ALLOW_NO_AUTH=1: 認証なしで動作します（開発用途のみ）")
+    else:
+        logger.warning(
+            "API_KEY 未設定: 認証対象エンドポイントは全て 401 を返します（無認証で使うなら ALLOW_NO_AUTH=1）"
+        )
+
+
 def require_api_key(key: str | None = Depends(_API_KEY_HEADER)) -> None:
     expected = os.environ.get("API_KEY")
-    if expected and key != expected:
+    if not expected:
+        # fail-closed: API_KEY 未設定は明示的な ALLOW_NO_AUTH=1 がある場合のみ通す
+        if _allow_no_auth():
+            return
+        raise HTTPException(status_code=401, detail="API Key not configured")
+    if not key or not secrets.compare_digest(key.encode("utf-8"), expected.encode("utf-8")):
         raise HTTPException(status_code=401, detail="Invalid API Key")
 
 
@@ -69,6 +91,12 @@ app = FastAPI(
     version="0.4.0",
 )
 app.include_router(schema_router, dependencies=[Depends(require_api_key)])
+
+
+@app.on_event("startup")
+def _startup_auth_warning() -> None:
+    warn_if_unauthenticated()
+
 
 # ── スキーマ ──────────────────────────────────────────────────────────────────
 
