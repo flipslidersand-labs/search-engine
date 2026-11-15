@@ -16,68 +16,56 @@ import time
 from collections.abc import Generator
 from contextlib import contextmanager
 
-try:
-    from prometheus_client import (  # pylint: disable=import-error
-        CONTENT_TYPE_LATEST,
-        REGISTRY,
-        Counter,
-        Gauge,
-        Histogram,
-        generate_latest,
-    )
-
-    _HAS_PROMETHEUS = True
-except ImportError:
-    _HAS_PROMETHEUS = False
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    REGISTRY,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
 
 _LATENCY_BUCKETS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0)
 
-if _HAS_PROMETHEUS:
-    SEARCH_REQUESTS = Counter(
-        "search_requests_total",
-        "Total search requests",
-        ["mode", "status"],
-    )
-    SEARCH_LATENCY = Histogram(
-        "search_latency_seconds",
-        "Search request latency",
-        ["mode"],
-        buckets=_LATENCY_BUCKETS,
-    )
-    INDEX_REQUESTS = Counter(
-        "index_requests_total",
-        "Total /index requests",
-        ["status"],
-    )
-    INDEX_DOCUMENTS = Gauge(
-        "index_documents_total",
-        "Number of indexed documents",
-    )
-    INDEX_CHUNKS = Gauge(
-        "index_chunks_total",
-        "Number of indexed chunks",
-    )
-    RAG_REQUESTS = Counter(
-        "rag_requests_total",
-        "Total /ask requests",
-        ["status"],
-    )
-    RAG_LATENCY = Histogram(
-        "rag_latency_seconds",
-        "RAG (/ask) request latency",
-        buckets=_LATENCY_BUCKETS,
-    )
-else:
-    SEARCH_REQUESTS = SEARCH_LATENCY = INDEX_REQUESTS = None
-    RAG_REQUESTS = RAG_LATENCY = None
+SEARCH_REQUESTS = Counter(
+    "search_requests_total",
+    "Total search requests",
+    ["mode", "status"],
+)
+SEARCH_LATENCY = Histogram(
+    "search_latency_seconds",
+    "Search request latency",
+    ["mode"],
+    buckets=_LATENCY_BUCKETS,
+)
+INDEX_REQUESTS = Counter(
+    "index_requests_total",
+    "Total /index requests",
+    ["status"],
+)
+INDEX_DOCUMENTS = Gauge(
+    "index_documents_total",
+    "Number of indexed documents",
+)
+INDEX_CHUNKS = Gauge(
+    "index_chunks_total",
+    "Number of indexed chunks",
+)
+RAG_REQUESTS = Counter(
+    "rag_requests_total",
+    "Total /ask requests",
+    ["status"],
+)
+RAG_LATENCY = Histogram(
+    "rag_latency_seconds",
+    "RAG (/ask) request latency",
+    buckets=_LATENCY_BUCKETS,
+)
 
 
 @contextmanager
 def _track(counter, histogram=None, **labels: str) -> Generator[None, None, None]:
     """リクエスト数(status 付き)と任意でレイテンシを記録する共通 context manager。"""
-    if not _HAS_PROMETHEUS:
-        yield
-        return
     start = time.perf_counter()
     status = "success"
     try:
@@ -106,14 +94,10 @@ def track_rag():
 
 
 def update_index_gauges(documents: int, chunks: int) -> None:
-    if not _HAS_PROMETHEUS:
-        return
     INDEX_DOCUMENTS.set(documents)
     INDEX_CHUNKS.set(chunks)
 
 
 def metrics_output() -> tuple[bytes, str]:
     """Prometheus テキスト形式のメトリクスを返す。"""
-    if not _HAS_PROMETHEUS:
-        return b"# prometheus-client not installed\n", "text/plain"
     return generate_latest(REGISTRY), CONTENT_TYPE_LATEST
