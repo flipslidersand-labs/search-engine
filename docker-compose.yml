@@ -4,6 +4,11 @@ services:
     image: search-engine:latest
     container_name: search-engine
     restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp
     ports:
       - "8010:8000"
     volumes:
