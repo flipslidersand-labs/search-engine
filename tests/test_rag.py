@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 from searchengine import server
 from searchengine.index import Index
-from searchengine.llm import Message, OllamaClient
+from searchengine.llm import LLMError, Message, OllamaClient
 from searchengine.rag import AskResult, Source, ask
 
 # ── フィクスチャ ──────────────────────────────────────────────────────────────
@@ -86,8 +86,22 @@ def test_ollama_client_connection_error():
 
     with patch("httpx.post", side_effect=httpx_module.ConnectError("接続失敗")):
         client = OllamaClient(base_url="http://localhost:11434")
-        with pytest.raises(httpx_module.ConnectError):
+        with pytest.raises(LLMError, match="接続失敗") as ei:
             client.chat([Message(role="user", content="test")])
+    assert isinstance(ei.value.__cause__, httpx_module.ConnectError)
+
+
+def test_ollama_client_http_status_error():
+    import httpx as httpx_module
+
+    resp = httpx_module.Response(503, request=httpx_module.Request("POST", "http://x/api/chat"))
+    mock = MagicMock()
+    mock.raise_for_status.side_effect = httpx_module.HTTPStatusError(
+        "boom", request=resp.request, response=resp
+    )
+    with patch("httpx.post", return_value=mock):
+        with pytest.raises(LLMError, match="boom"):
+            OllamaClient().chat([Message(role="user", content="t")])
 
 
 # ── ask() 単体テスト ──────────────────────────────────────────────────────────
@@ -163,6 +177,7 @@ def test_ask_endpoint_ollama_error(indexed_client):
         )
 
     assert r.status_code == 500
+    assert r.json()["detail"] == "Ollama エラー: Ollama 未起動"
 
 
 def test_ask_endpoint_empty_question(client):

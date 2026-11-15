@@ -31,8 +31,9 @@ from fastapi.responses import HTMLResponse  # pylint: disable=import-error
 from fastapi.security.api_key import APIKeyHeader  # pylint: disable=import-error
 from pydantic import BaseModel, Field  # pylint: disable=import-error
 
-from . import hybrid, ingest, query, tokenizer
+from . import hybrid, ingest, query, rag, tokenizer
 from .index import Index
+from .llm import LLMError
 from .metrics import (
     metrics_output,
     track_index,
@@ -336,12 +337,6 @@ def stats() -> StatsResponse:
 @app.post("/ask", response_model=AskResponse, dependencies=[Depends(require_api_key)])
 def ask(req: AskRequest) -> AskResponse:
     """RAG: 検索 → Ollama で回答生成。"""
-    import os
-
-    import httpx as httpx_module
-
-    from . import rag as rag_module
-
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="question が空です")
     if req.ollama_url:
@@ -351,7 +346,7 @@ def ask(req: AskRequest) -> AskResponse:
     idx = _open_index(want_vector=want_vector)
     with track_rag():
         try:
-            result = rag_module.ask(
+            result = rag.ask(
                 idx,
                 req.question,
                 mode=req.mode,
@@ -359,7 +354,7 @@ def ask(req: AskRequest) -> AskResponse:
                 ollama_url=req.ollama_url or os.environ.get("OLLAMA_URL", "http://localhost:11434"),
                 model=req.model,
             )
-        except httpx_module.HTTPError as e:
+        except LLMError as e:
             raise HTTPException(status_code=500, detail=f"Ollama エラー: {e}")
         finally:
             idx.close()
