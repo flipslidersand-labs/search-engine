@@ -65,6 +65,9 @@ Storage: SQLite (FTS5 + BLOB vectors) / Qdrant (optional)
 ```bash
 pip install -r requirements.txt
 
+# Optional features (Qdrant / Excel / Google Sheets / fugashi) / 任意機能
+pip install -r requirements-optional.txt
+
 # Keyword index only / キーワードのみ
 python3 -m searchengine.cli index ./sample_docs --db search.db
 
@@ -81,8 +84,8 @@ uvicorn searchengine.server:app --reload --port 8000
 
 ## API Reference / API リファレンス
 
-All endpoints require `X-API-Key` header (skipped if `API_KEY` unset).
-全エンドポイントは `X-API-Key` ヘッダーで認証（`API_KEY` 未設定時はスキップ）。
+All endpoints except `/health` and `/metrics` require the `X-API-Key` header. If `API_KEY` is unset, they fail closed (401) unless `ALLOW_NO_AUTH=1` is set (local development only). `/health` and `/metrics` are unauthenticated by design: do not expose them publicly; restrict them at the network/reverse-proxy level.
+`/health` と `/metrics` 以外は `X-API-Key` ヘッダーで認証。`API_KEY` 未設定時は fail-closed（401）で、`ALLOW_NO_AUTH=1` を明示した場合のみ無認証で動作（ローカル開発専用）。`/health`・`/metrics` は意図的に無認証のため、公開せずネットワーク/リバースプロキシで制限すること。
 
 ### `POST /index` — Index documents / ドキュメントをインデックス
 
@@ -127,7 +130,8 @@ No auth required. Returns `search_requests_total`, `search_latency_seconds`, etc
 | Variable / 変数 | Default / デフォルト | Description / 説明 |
 | --------------- | -------------------- | ------------------ |
 | `SEARCH_DB` | `search.db` | SQLite DB path / SQLite DB パス |
-| `API_KEY` | (unset = skip / 未設定=スキップ) | Auth key / 認証キー |
+| `API_KEY` | (unset = 401 / 未設定=401) | Auth key / 認証キー |
+| `ALLOW_NO_AUTH` | (unset) | `1` allows running without `API_KEY` (dev only) / `API_KEY` なし動作を許可（開発専用） |
 | `ALLOWED_INDEX_DIRS` | (required / 必須) | Allowed dirs for `/index` / `/index` 許可ディレクトリ |
 | `OLLAMA_URL` | `http://localhost:11434` | Ollama server URL |
 | `OLLAMA_MODEL` | `qwen2.5:7b` | Model for RAG |

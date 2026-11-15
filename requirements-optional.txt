@@ -1,0 +1,19 @@
+# 任意機能の依存（必須ではない。未導入でも本体は動作する）。
+# 導入: pip install -r requirements-optional.txt
+# lock 化はせず範囲指定のみ。必要な節だけ抜き出して入れてもよい。
+
+# Qdrant ベクトルストア (QDRANT_URL 指定時 / searchengine/vector_store.py)
+qdrant-client>=1.9,<2
+
+# Excel 入出力 (searchengine/schema_gen/ingest.py, requirements_doc.py)
+openpyxl>=3.1,<4
+
+# Google Sheets 連携 (searchengine/schema_gen/sheets.py)
+google-auth>=2.0,<3
+google-auth-oauthlib>=1.0,<2
+google-api-python-client>=2.0,<3
+
+# 日本語形態素解析 (searchengine/tokenizer.py)
+# 辞書が無いと fugashi.Tagger() が失敗しフォールバックするため unidic-lite も必要
+fugashi>=1.3,<2
+unidic-lite>=1.0.8,<2
