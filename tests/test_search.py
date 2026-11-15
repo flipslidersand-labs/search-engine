@@ -259,7 +259,7 @@ def test_operator_normalization_keeps_terms():
     idx = Index(":memory:")
     idx.add_document("/x/ml.md", "機械学習はデータからモデルを学習する分野である。")
     assert idx.search(query.to_fts_query("機械学習 AND"))
-    assert idx.search(query.to_fts_query("NOT 機械学習"))
+    assert idx.search(query.to_fts_query("NOT 機械学習")) == []  # 否定のみは空 (#169)
     assert idx.search(query.to_fts_query("AND")) == []
     idx.close()
 
@@ -278,3 +278,59 @@ def test_search_non_syntax_db_error_is_not_swallowed():
     with pytest.raises(sqlite3.OperationalError):
         idx.search('"foo"')
     idx.close()
+
+
+# ── #169: 記号トークン除去 / 先頭 NOT / --db ──────────────────────────────
+
+
+def test_symbol_only_tokens_dropped_from_query():
+    q = query.to_fts_query("C++入門")
+    assert '"++"' not in q
+    assert '""' not in q
+    idx = Index(":memory:")
+    idx.add_document("/x/c.md", "C++入門の本です")
+    assert idx.search(q)
+    idx.close()
+
+
+def test_symbol_only_query_returns_empty_without_error():
+    idx = Index(":memory:")
+    idx.add_document("/x/c.md", "C++入門の本です")
+    assert idx.search(query.to_fts_query("+++")) == []
+    idx.close()
+
+
+def test_leading_not_keeps_negation_semantics():
+    idx = Index(":memory:")
+    idx.add_document("/x/a.md", "machine learning basics")
+    idx.add_document("/x/b.md", "deep learning basics")
+    paths = {r.path for r in idx.search(query.to_fts_query("NOT machine learning"))}
+    assert paths == {"/x/b.md"}
+    idx.close()
+
+
+def test_only_negative_query_returns_empty():
+    idx = Index(":memory:")
+    idx.add_document("/x/a.md", "machine learning basics")
+    idx.add_document("/x/b.md", "deep learning basics")
+    assert idx.search(query.to_fts_query("NOT machine")) == []
+    idx.close()
+
+
+def test_cli_db_sets_env_before_uvicorn(monkeypatch):
+    import uvicorn
+
+    from searchengine import server
+
+    monkeypatch.delenv("SEARCH_DB", raising=False)
+    seen = {}
+
+    def fake_run(*a, **kw):
+        seen["env"] = os.environ.get("SEARCH_DB")
+
+    monkeypatch.setattr(uvicorn, "run", fake_run)
+    monkeypatch.setattr(sys, "argv", ["server", "--db", "/tmp/x169.db"])
+    monkeypatch.setattr(server, "_DB_PATH", server._DB_PATH)
+    server._cli()
+    assert seen["env"] == "/tmp/x169.db"
+    monkeypatch.delenv("SEARCH_DB", raising=False)

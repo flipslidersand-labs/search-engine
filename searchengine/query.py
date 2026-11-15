@@ -57,10 +57,15 @@ def parse(user_query: str) -> ParsedQuery:
     return ParsedQuery(fts=to_fts_query(fts_input), raw=raw, filters=filters)
 
 
+def _word_tokens(text: str) -> list[str]:
+    """unicode61 で語にならない（英数字・かな漢字を含まない）トークンを捨てる (#169)。"""
+    return [t for t in tokenizer.tokenize(text) if any(c.isalnum() for c in t)]
+
+
 def _quote_terms(text: str) -> list[str]:
     """生テキストを形態素分割し、各語を FTS5 用にクォート。"""
     out = []
-    for tok in tokenizer.tokenize(text):
+    for tok in _word_tokens(text):
         # FTS5 の特殊文字を避けるため二重引用符で包む
         out.append('"' + tok.replace('"', "") + '"')
     return out
@@ -75,7 +80,7 @@ def to_fts_query(user_query: str) -> str:
         before = user_query[pos : m.start()]
         parts.extend(_emit_tokens(before))
         # フレーズはトークン化して NEAR 的に連結（順序保持の "a b" 形式）
-        phrase_tokens = tokenizer.tokenize(m.group(1))
+        phrase_tokens = _word_tokens(m.group(1))
         if phrase_tokens:
             parts.append('"' + " ".join(phrase_tokens) + '"')
         pos = m.end()
@@ -84,7 +89,7 @@ def to_fts_query(user_query: str) -> str:
     # 空なら全ヒット回避のため非マッチ語を返す
     if not [p for p in parts if p not in ("AND", "OR", "NOT")]:
         return '""'
-    return _join(parts)
+    return _join(parts) or '""'
 
 
 def _emit_tokens(text: str) -> list[str]:
@@ -121,6 +126,8 @@ def _normalize_ops(parts: list[str]) -> list[str]:
     for p in parts:
         if p in _OPS:
             if not out:
+                if p == "NOT":
+                    out.append(p)  # 先頭 NOT は後段で意味を保って並べ替える
                 continue
             if out[-1] in _OPS:
                 out[-1] = p
@@ -128,4 +135,12 @@ def _normalize_ops(parts: list[str]) -> list[str]:
         out.append(p)
     while out and out[-1] in _OPS:
         out.pop()
+    while out and out[0] in ("AND", "OR"):
+        out.pop(0)
+    if out and out[0] == "NOT":
+        # FTS5 は先頭 NOT 不可。`NOT a b` → `b NOT a`（否定を保つ）。肯定語が無ければ空。
+        neg, rest = out[1:2], out[2:]
+        while rest and rest[0] in _OPS:
+            rest.pop(0)
+        out = [*rest, "NOT", *neg] if rest and neg else []
     return out

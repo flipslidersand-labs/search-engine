@@ -386,6 +386,8 @@ def _cli() -> None:
     args = p.parse_args()
 
     _set_db(args.db)
+    # uvicorn は別モジュール searchengine.server を import するため環境変数で渡す (#169)
+    os.environ["SEARCH_DB"] = args.db
 
     import uvicorn  # pylint: disable=import-error
 
