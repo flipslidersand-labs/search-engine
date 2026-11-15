@@ -184,13 +184,11 @@ pip-compile --no-index --output-file=requirements.lock.txt requirements.txt
 
 ```bash
 python3 -m pytest tests/ -q
-# 159 passed, 3 skipped
+# 311 passed, 4 skipped (as of 2026-11-16 / 2026-11-16 時点)
 ```
 
-| Test file / テストファイル | Target / 対象 | Tests |
-| -------------------------- | ------------- | ----- |
-| `test_search.py` | FTS5 / BM25 / query parser | 34 |
-| `test_server.py` | FastAPI endpoints | 47 |
-| `test_rag.py` | RAG pipeline + /ask | 10 |
-| `test_embedder.py` | Embedder / RemoteEmbedder | 16 |
-| `test_mcp_server.py` | MCP server | 11 |
+Test files live in `tests/` (one per module). / テストは `tests/` に、モジュールごとに置いている。
+
+## Changelog / 変更履歴
+
+See [CHANGELOG.md](CHANGELOG.md). / [CHANGELOG.md](CHANGELOG.md) を参照。
