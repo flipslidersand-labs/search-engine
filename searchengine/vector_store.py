@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import os
 import sqlite3
+import uuid
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
@@ -177,7 +178,7 @@ class QdrantVectorStore:
             )
 
     def upsert(self, doc_id: str, chunk_index: int, vec: np.ndarray) -> None:
-        point_id = abs(hash(f"{doc_id}:{chunk_index}")) % (2**63)
+        point_id = _point_id(doc_id, chunk_index)
         self._client.upsert(
             collection_name=self._collection,
             points=[
@@ -230,6 +231,14 @@ class QdrantVectorStore:
 
     def close(self) -> None:
         self._client.close()
+
+
+_POINT_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "searchengine/qdrant-point")
+
+
+def _point_id(doc_id: str, chunk_index: int) -> str:
+    """(doc_id, chunk_index) から決定的な UUID5 文字列を返す (hash() 非依存)。"""
+    return str(uuid.uuid5(_POINT_NAMESPACE, f"{doc_id}:{chunk_index}"))
 
 
 # ── ファクトリ ────────────────────────────────────────────────────────────────
