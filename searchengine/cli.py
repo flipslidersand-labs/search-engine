@@ -19,9 +19,9 @@ from .index import Index
 def _make_index(args: argparse.Namespace, *, want_vector: bool) -> Index:
     embedder = None
     if want_vector:
-        from .embedder import Embedder  # numpy 依存。必要時のみ import
+        from .embedder import create_embedder  # numpy 依存。必要時のみ import
 
-        embedder = Embedder()
+        embedder = create_embedder()
     return Index(args.db, embedder=embedder)
 
 
