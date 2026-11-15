@@ -176,3 +176,24 @@ def test_import_error_without_qdrant_client():
         pytest.raises(ImportError, match="pip install qdrant-client"),
     ):
         QdrantVectorStore(url="http://localhost:6333")
+
+
+# ── point_id の決定性 (#125) ─────────────────────────────────────────────────
+
+
+def _upsert_ids(store, doc_id: str, chunk_index: int) -> list:
+    store._client.upsert.reset_mock()
+    store.upsert(doc_id, chunk_index, _vec())
+    return [p.id for p in store._client.upsert.call_args[1]["points"]]
+
+
+def test_upsert_point_id_is_fixed_value(qdrant_store):
+    """hash() 非依存: 既知の固定値と一致する (PYTHONHASHSEED でぶれない)。"""
+    assert _upsert_ids(qdrant_store, "doc1", 0) == ["6415c059-6613-5eb9-bc9c-2414c06fd5de"]
+
+
+def test_upsert_point_id_stable_across_calls_and_distinct(qdrant_store):
+    first = _upsert_ids(qdrant_store, "doc1", 0)
+    assert _upsert_ids(qdrant_store, "doc1", 0) == first
+    assert _upsert_ids(qdrant_store, "doc1", 1) != first
+    assert _upsert_ids(qdrant_store, "doc2", 0) != first
