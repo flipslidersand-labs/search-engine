@@ -162,7 +162,11 @@ class Index:
             " FROM chunks_fts f JOIN documents d ON d.doc_id = f.doc_id"
             " WHERE chunks_fts MATCH ?" + where + " ORDER BY score LIMIT ?"
         )
-        rows = self.conn.execute(sql, [fts_query, *fparams, limit]).fetchall()
+        try:
+            rows = self.conn.execute(sql, [fts_query, *fparams, limit]).fetchall()
+        except sqlite3.OperationalError:
+            # FTS5 構文エラー(演算子のみ等)は 500 にせず空結果 (#127)
+            return []
         return [
             Hit(doc_id=r[0], path=r[1], chunk_index=r[2], snippet=r[3], score=r[4]) for r in rows
         ]
