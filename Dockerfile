@@ -7,7 +7,14 @@ RUN pip install --no-cache-dir -r requirements.lock.txt
 
 COPY searchengine/ ./searchengine/
 
+RUN groupadd --system app && useradd --system --gid app --no-create-home app \
+    && mkdir -p /data && chown app:app /data
+
 ENV SEARCH_DB=/data/search.db
+
+VOLUME /data
+
+USER app
 
 EXPOSE 8000
 
