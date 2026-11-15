@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient  # pylint: disable=import-error
 
-from searchengine import server
+from searchengine import hybrid, server
+from searchengine.index import Index
 
 
 @pytest.fixture()
@@ -311,3 +312,25 @@ def test_validate_index_path_rejects_empty_entries(tmp_path, monkeypatch):
     monkeypatch.setenv("ALLOWED_INDEX_DIRS", ":")
     with pytest.raises(PathNotAllowedError, match="未設定"):
         validate_index_path(str(tmp_path))
+
+
+def test_search_nugget_uses_full_chunk_text(client, tmp_path, monkeypatch):
+    """関連文がチャンク末尾にあっても原文から抽出され、マーカーが混入しない (#134)。"""
+    filler = " ".join(f"Filler sentence number {i} about nothing." for i in range(30))
+    (tmp_path / "long.txt").write_text(
+        f"Alpha overview starts here. {filler} The zanzibar protocol requires quorum.",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("ALLOWED_INDEX_DIRS", str(tmp_path))
+    client.post("/index", json={"path": str(tmp_path)})
+
+    def fts_only(idx, parsed, limit=10):
+        return [hybrid.Fused(hit=h, rrf=h.score) for h in idx.search(parsed.fts, limit=limit)]
+
+    monkeypatch.setattr(server.hybrid, "search", fts_only)
+    monkeypatch.setattr(server, "_open_index", lambda want_vector=False: Index(server._DB_PATH))
+    r = client.get("/search", params={"q": "zanzibar", "mode": "nugget", "nuggets_per_chunk": 1})
+    assert r.status_code == 200
+    snippet = r.json()["results"][0]["snippet"]
+    assert "zanzibar protocol requires quorum" in snippet
+    assert "[" not in snippet and "]" not in snippet
