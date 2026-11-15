@@ -149,95 +149,97 @@ def create_server() -> Server:
             if name == "search":
                 mode: Literal["keyword", "vector", "hybrid"] = args.get("mode", "hybrid")
                 want_vector = mode in ("vector", "hybrid")
-                idx = _open_index(want_vector=want_vector)
-                top_k: int = _clamp_top_k(args.get("top_k", 5))
-                parsed = parse_query(args["query"])
+                with _open_index(want_vector=want_vector) as idx:
+                    top_k: int = _clamp_top_k(args.get("top_k", 5))
+                    parsed = parse_query(args["query"])
 
-                if mode == "keyword":
-                    raw_hits = [
-                        (h, h.score)
-                        for h in idx.search(parsed.fts, limit=top_k, filters=parsed.filters)
-                    ]
-                elif mode == "vector":
-                    raw_hits = [
-                        (h, h.score)
-                        for h in idx.vector_search(parsed.raw, limit=top_k, filters=parsed.filters)
-                    ]
-                else:
-                    fused = hybrid.search(idx, parsed, limit=top_k)
-                    raw_hits = [(f.hit, f.rrf) for f in fused]
+                    if mode == "keyword":
+                        raw_hits = [
+                            (h, h.score)
+                            for h in idx.search(parsed.fts, limit=top_k, filters=parsed.filters)
+                        ]
+                    elif mode == "vector":
+                        raw_hits = [
+                            (h, h.score)
+                            for h in idx.vector_search(
+                                parsed.raw, limit=top_k, filters=parsed.filters
+                            )
+                        ]
+                    else:
+                        fused = hybrid.search(idx, parsed, limit=top_k)
+                        raw_hits = [(f.hit, f.rrf) for f in fused]
 
-                result = {
-                    "mode": mode,
-                    "query": args["query"],
-                    "total": len(raw_hits),
-                    "results": [
-                        {
-                            "rank": i + 1,
-                            "score": round(score, 4),
-                            "path": h.path,
-                            "chunk_index": h.chunk_index,
-                            "snippet": h.snippet,
-                        }
-                        for i, (h, score) in enumerate(raw_hits)
-                    ],
-                }
+                    result = {
+                        "mode": mode,
+                        "query": args["query"],
+                        "total": len(raw_hits),
+                        "results": [
+                            {
+                                "rank": i + 1,
+                                "score": round(score, 4),
+                                "path": h.path,
+                                "chunk_index": h.chunk_index,
+                                "snippet": h.snippet,
+                            }
+                            for i, (h, score) in enumerate(raw_hits)
+                        ],
+                    }
 
             elif name == "ask":
                 mode = args.get("mode", "hybrid")
-                idx = _open_index(want_vector=True)
-                res = rag_ask(
-                    idx,
-                    args["question"],
-                    mode=mode,
-                    top_k=_clamp_top_k(args.get("top_k", 5)),
-                    ollama_url=_OLLAMA_URL,
-                    model=args.get("model", _OLLAMA_MODEL),
-                )
-                result = {
-                    "answer": res.answer,
-                    "model": res.model,
-                    "latency_ms": res.latency_ms,
-                    "sources": [
-                        {
-                            "path": s.path,
-                            "chunk_index": s.chunk_index,
-                            "snippet": s.snippet,
-                            "score": round(s.score, 4),
-                        }
-                        for s in res.sources
-                    ],
-                }
+                with _open_index(want_vector=True) as idx:
+                    res = rag_ask(
+                        idx,
+                        args["question"],
+                        mode=mode,
+                        top_k=_clamp_top_k(args.get("top_k", 5)),
+                        ollama_url=_OLLAMA_URL,
+                        model=args.get("model", _OLLAMA_MODEL),
+                    )
+                    result = {
+                        "answer": res.answer,
+                        "model": res.model,
+                        "latency_ms": res.latency_ms,
+                        "sources": [
+                            {
+                                "path": s.path,
+                                "chunk_index": s.chunk_index,
+                                "snippet": s.snippet,
+                                "score": round(s.score, 4),
+                            }
+                            for s in res.sources
+                        ],
+                    }
 
             elif name == "index":
                 want_vector = bool(args.get("vector", False))
                 validate_index_path(args["path"])
-                idx = _open_index(want_vector=want_vector)
-                indexed = 0
-                for file_path in ingest.iter_files(args["path"], allowed_index_dirs()):
-                    doc_type = ingest.detect_type(file_path)
-                    if doc_type is None:
-                        continue
-                    text = ingest.read_text(file_path)
-                    idx.add_document(file_path, text, doc_type=doc_type)
-                    indexed += 1
-                st = idx.stats()
-                embedder_name = type(idx.embedder).__name__ if idx.embedder else None
-                result = {
-                    "indexed": indexed,
-                    "documents": st["documents"],
-                    "chunks": st["chunks"],
-                    "embedder": embedder_name,
-                }
+                with _open_index(want_vector=want_vector) as idx:
+                    indexed = 0
+                    for file_path in ingest.iter_files(args["path"], allowed_index_dirs()):
+                        doc_type = ingest.detect_type(file_path)
+                        if doc_type is None:
+                            continue
+                        text = ingest.read_text(file_path)
+                        idx.add_document(file_path, text, doc_type=doc_type)
+                        indexed += 1
+                    st = idx.stats()
+                    embedder_name = type(idx.embedder).__name__ if idx.embedder else None
+                    result = {
+                        "indexed": indexed,
+                        "documents": st["documents"],
+                        "chunks": st["chunks"],
+                        "embedder": embedder_name,
+                    }
 
             elif name == "stats":
-                idx = _open_index()
-                st = idx.stats()
-                result = {
-                    "documents": st["documents"],
-                    "chunks": st["chunks"],
-                    "db": _DB_PATH,
-                }
+                with _open_index() as idx:
+                    st = idx.stats()
+                    result = {
+                        "documents": st["documents"],
+                        "chunks": st["chunks"],
+                        "db": _DB_PATH,
+                    }
 
             else:
                 return types.CallToolResult(
