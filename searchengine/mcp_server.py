@@ -119,8 +119,7 @@ TOOLS = [
         description="DB の統計情報（文書数・チャンク数・使用トークナイザー）を返す。",
         input_schema={
             "type": "object",
-            "properties": {
-            },
+            "properties": {},
             "required": [],
         },
     ),
