@@ -265,7 +265,7 @@ async function doSearch() {
     renderResults(data);
   } catch(e) {
     toast('エラー: ' + e.message, true);
-    document.getElementById('results').innerHTML = `<div class="empty">${e.message}</div>`;
+    document.getElementById('results').innerHTML = `<div class="empty">${escHtml(e.message)}</div>`;
     document.getElementById('search-meta').textContent = '';
   } finally {
     btn.innerHTML = '検索';
@@ -284,12 +284,12 @@ function renderResults(data) {
   results.innerHTML = data.results.map(r => `
     <div class="result-card">
       <div class="result-header">
-        <span class="rank">${r.rank}</span>
+        <span class="rank">${escHtml(r.rank)}</span>
         <span class="path">${escHtml(r.path)}</span>
-        <span class="score">score: ${r.score.toFixed(4)}</span>
+        <span class="score">score: ${escHtml(r.score.toFixed(4))}</span>
       </div>
       <div class="snippet">${escHtml(r.snippet)}</div>
-      <div class="chunk-tag">chunk #${r.chunk_index}</div>
+      <div class="chunk-tag">chunk #${escHtml(r.chunk_index)}</div>
     </div>`).join('');
 }
 
@@ -312,7 +312,7 @@ async function doIndex() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || res.statusText);
-    res_el.innerHTML = `✅ ${data.indexed} ファイルを追加  — documents: <b>${data.documents}</b>  chunks: <b>${data.chunks}</b>  tokenizer: ${data.tokenizer}`;
+    res_el.innerHTML = `✅ ${escHtml(data.indexed)} ファイルを追加  — documents: <b>${escHtml(data.documents)}</b>  chunks: <b>${escHtml(data.chunks)}</b>  tokenizer: ${escHtml(data.tokenizer)}`;
     toast(`${data.indexed} ファイルをインデックスしました`);
   } catch(e) {
     res_el.innerHTML = `<span style="color:var(--red)">❌ ${escHtml(e.message)}</span>`;
@@ -333,9 +333,9 @@ async function doStats() {
     if (!res.ok) throw new Error(data.detail || res.statusText);
     el.innerHTML = `
       <div class="stats-grid">
-        <div class="stat-box"><div class="stat-val">${data.documents}</div><div class="stat-label">ドキュメント数</div></div>
-        <div class="stat-box"><div class="stat-val">${data.chunks}</div><div class="stat-label">チャンク数</div></div>
-        <div class="stat-box"><div class="stat-val" style="font-size:1.1rem">${data.tokenizer}</div><div class="stat-label">トークナイザー</div></div>
+        <div class="stat-box"><div class="stat-val">${escHtml(data.documents)}</div><div class="stat-label">ドキュメント数</div></div>
+        <div class="stat-box"><div class="stat-val">${escHtml(data.chunks)}</div><div class="stat-label">チャンク数</div></div>
+        <div class="stat-box"><div class="stat-val" style="font-size:1.1rem">${escHtml(data.tokenizer)}</div><div class="stat-label">トークナイザー</div></div>
       </div>
       <p style="margin-top:.75rem;font-size:.8rem;color:var(--muted)">DB: ${escHtml(data.db)}</p>`;
   } catch(e) {
