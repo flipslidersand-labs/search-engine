@@ -10,6 +10,8 @@ import logging
 import os
 from pathlib import Path
 
+from .security import is_within
+
 logger = logging.getLogger(__name__)
 
 TEXT_EXTS = {
@@ -32,18 +34,18 @@ def read_text(path: str) -> str:
         return f.read()
 
 
-def _within(path: str, allowed: list[Path]) -> bool:
-    resolved = Path(path).resolve()
-    return any(resolved.is_relative_to(d) for d in allowed)
-
-
 def iter_files(root: str, allowed: list[Path] | None = None):
     """対応拡張子のファイルを再帰列挙。
 
-    allowed を渡すと、symlink を解決した実体がその範囲外のファイルはスキップする。
+    allowed を渡すと、symlink を解決した実体がその範囲外のファイルはスキップする
+    (単一ファイル指定にも適用)。None は検査なし(CLI などローカル信頼の呼び出し用)。
+    HTTP / MCP は必ず allowed_index_dirs() を渡すこと。
     """
     if os.path.isfile(root):
         if detect_type(root):
+            if allowed is not None and not is_within(root, allowed):
+                logger.warning("許可範囲外のファイルをスキップ: %r", root)
+                return
             yield root
         return
     for dirpath, dirnames, filenames in os.walk(root):
@@ -53,7 +55,7 @@ def iter_files(root: str, allowed: list[Path] | None = None):
             full = os.path.join(dirpath, name)
             if not detect_type(full):
                 continue
-            if allowed is not None and not _within(full, allowed):
-                logger.warning("許可範囲外を指す symlink をスキップ: %s", full)
+            if allowed is not None and not is_within(full, allowed):
+                logger.warning("許可範囲外を指す symlink をスキップ: %r", full)
                 continue
             yield full

@@ -16,11 +16,16 @@ def allowed_index_dirs() -> list[Path]:
     return [Path(d.strip()).resolve() for d in raw.split(":") if d.strip()]
 
 
-def validate_index_path(path: str) -> None:
-    """ALLOWED_INDEX_DIRS の範囲外パスを拒否する(未設定は fail-closed)。"""
-    if not os.environ.get("ALLOWED_INDEX_DIRS", ""):
-        raise PathNotAllowedError("ALLOWED_INDEX_DIRS が未設定です")
+def is_within(path: str, allowed: list[Path]) -> bool:
+    """path を resolve した実体が allowed のどれかの配下なら True。"""
     resolved = Path(path).resolve()
-    if any(resolved.is_relative_to(d) for d in allowed_index_dirs()):
-        return
-    raise PathNotAllowedError(f"許可されていないパス: {path}")
+    return any(resolved.is_relative_to(d) for d in allowed)
+
+
+def validate_index_path(path: str) -> None:
+    """ALLOWED_INDEX_DIRS の範囲外パスを拒否する(未設定・空指定は fail-closed)。"""
+    dirs = allowed_index_dirs()
+    if not dirs:
+        raise PathNotAllowedError("ALLOWED_INDEX_DIRS が未設定です")
+    if not is_within(path, dirs):
+        raise PathNotAllowedError(f"許可されていないパス: {path}")
