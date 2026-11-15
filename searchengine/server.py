@@ -40,6 +40,7 @@ from .metrics import (
     update_index_gauges,
 )
 from .schema_gen.api import router as schema_router
+from .security import PathNotAllowedError, validate_index_path
 
 logger = logging.getLogger(__name__)
 
@@ -166,15 +167,10 @@ def metrics():
 
 def _validate_path(path: str) -> None:
     """ALLOWED_INDEX_DIRS の範囲外パスを 403 で拒否する。"""
-    allowed_raw = os.environ.get("ALLOWED_INDEX_DIRS", "")
-    if not allowed_raw:
-        raise HTTPException(status_code=403, detail="ALLOWED_INDEX_DIRS が未設定です")
-    resolved = Path(path).resolve()
-    for d in allowed_raw.split(":"):
-        d = d.strip()
-        if d and resolved.is_relative_to(Path(d).resolve()):
-            return
-    raise HTTPException(status_code=403, detail=f"許可されていないパス: {path}")
+    try:
+        validate_index_path(path)
+    except PathNotAllowedError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
 def _validate_ollama_url(url: str) -> None:

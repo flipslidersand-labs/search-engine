@@ -29,6 +29,7 @@ from . import hybrid, ingest
 from .index import Index
 from .query import parse as parse_query
 from .rag import ask as rag_ask
+from .security import validate_index_path
 
 _DB_PATH = os.environ.get("SEARCH_DB", "search.db")
 _OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
@@ -39,10 +40,10 @@ def _make_text(text: str) -> list[types.TextContent]:
     return [types.TextContent(type="text", text=text)]
 
 
-def _open_index(db: str | None = None, *, want_vector: bool = False) -> Index:
+def _open_index(*, want_vector: bool = False) -> Index:
     from .embedder import create_embedder
 
-    db_path = db or _DB_PATH
+    db_path = _DB_PATH
     embedder = create_embedder() if want_vector else None
     return Index(db_path, embedder=embedder)
 
@@ -65,10 +66,6 @@ TOOLS = [
                     "description": "検索モード",
                 },
                 "top_k": {"type": "integer", "default": 5, "description": "取得件数"},
-                "db": {
-                    "type": "string",
-                    "description": "DB パス（省略時は SEARCH_DB 環境変数）",
-                },
             },
             "required": ["query"],
         },
@@ -94,7 +91,6 @@ TOOLS = [
                     "description": "Ollama モデル名",
                 },
                 "top_k": {"type": "integer", "default": 5},
-                "db": {"type": "string"},
             },
             "required": ["question"],
         },
@@ -114,7 +110,6 @@ TOOLS = [
                     "default": False,
                     "description": "ベクトル埋め込みも生成するか",
                 },
-                "db": {"type": "string"},
             },
             "required": ["path"],
         },
@@ -125,7 +120,6 @@ TOOLS = [
         input_schema={
             "type": "object",
             "properties": {
-                "db": {"type": "string"},
             },
             "required": [],
         },
@@ -151,7 +145,7 @@ def create_server() -> Server:
             if name == "search":
                 mode: Literal["keyword", "vector", "hybrid"] = args.get("mode", "hybrid")
                 want_vector = mode in ("vector", "hybrid")
-                idx = _open_index(args.get("db"), want_vector=want_vector)
+                idx = _open_index(want_vector=want_vector)
                 top_k: int = int(args.get("top_k", 5))
                 parsed = parse_query(args["query"])
 
@@ -187,7 +181,7 @@ def create_server() -> Server:
 
             elif name == "ask":
                 mode = args.get("mode", "hybrid")
-                idx = _open_index(args.get("db"), want_vector=True)
+                idx = _open_index(want_vector=True)
                 res = rag_ask(
                     idx,
                     args["question"],
@@ -213,7 +207,8 @@ def create_server() -> Server:
 
             elif name == "index":
                 want_vector = bool(args.get("vector", False))
-                idx = _open_index(args.get("db"), want_vector=want_vector)
+                validate_index_path(args["path"])
+                idx = _open_index(want_vector=want_vector)
                 indexed = 0
                 for file_path in ingest.iter_files(args["path"]):
                     doc_type = ingest.detect_type(file_path)
@@ -232,12 +227,12 @@ def create_server() -> Server:
                 }
 
             elif name == "stats":
-                idx = _open_index(args.get("db"))
+                idx = _open_index()
                 st = idx.stats()
                 result = {
                     "documents": st["documents"],
                     "chunks": st["chunks"],
-                    "db": args.get("db") or _DB_PATH,
+                    "db": _DB_PATH,
                 }
 
             else:
