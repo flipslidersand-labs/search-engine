@@ -184,10 +184,9 @@ pip-compile --no-index --output-file=requirements.lock.txt requirements.txt
 
 ```bash
 python3 -m pytest tests/ -q
-# 311 passed, 4 skipped (as of 2026-11-16 / 2026-11-16 時点)
 ```
 
-Test files live in `tests/` (one per module). / テストは `tests/` に、モジュールごとに置いている。
+Tests live in `tests/`; CI runs them on every PR. / テストは `tests/` にあり、CI が PR ごとに実行する。
 
 ## Changelog / 変更履歴
 
