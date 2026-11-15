@@ -101,8 +101,31 @@ def _emit_tokens(text: str) -> list[str]:
 def _join(parts: list[str]) -> str:
     """演算子が無い隣接語は暗黙 AND で連結。"""
     out: list[str] = []
-    for i, p in enumerate(parts):
-        if i > 0 and p not in ("AND", "OR", "NOT") and out[-1] not in ("AND", "OR", "NOT"):
+    for p in _normalize_ops(parts):
+        if out and p not in _OPS and out[-1] not in _OPS:
             out.append("AND")
         out.append(p)
     return " ".join(out)
+
+
+_OPS = ("AND", "OR", "NOT")
+
+
+def _normalize_ops(parts: list[str]) -> list[str]:
+    """FTS5 構文エラーになる演算子配置を除去する (#127)。
+
+    先頭/末尾の演算子を落とし、連続する演算子は最後の1つに畳む。
+    FTS5 は `a AND NOT b` を受け付けないため、連続の末尾が NOT なら NOT のみ残す。
+    """
+    out: list[str] = []
+    for p in parts:
+        if p in _OPS:
+            if not out:
+                continue
+            if out[-1] in _OPS:
+                out[-1] = p
+                continue
+        out.append(p)
+    while out and out[-1] in _OPS:
+        out.pop()
+    return out

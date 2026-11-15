@@ -1,6 +1,7 @@
 """Phase 1 のスモークテスト。stdlib のみで動作する。"""
 
 import os
+import sqlite3
 import sys
 from unittest.mock import MagicMock, patch
 
@@ -231,3 +232,49 @@ if __name__ == "__main__":
     test_non_question_query_unchanged()
     test_various_question_suffixes()
     print("all tests passed")
+
+
+@pytest.mark.parametrize(
+    "q",
+    [
+        "機械学習 AND",
+        "NOT 機械学習",
+        "機械学習 AND OR モデル",
+        "機械学習 AND NOT モデル",
+        "AND",
+        "OR NOT",
+        "AND 機械学習 OR",
+        "機械学習 OR OR モデル",
+    ],
+)
+def test_operator_edge_queries_do_not_raise(q):
+    idx = Index(":memory:")
+    idx.add_document("/x/ml.md", "機械学習はデータからモデルを学習する分野である。")
+    idx.search(query.to_fts_query(q))
+    idx.search(query.parse(q).fts)
+    idx.close()
+
+
+def test_operator_normalization_keeps_terms():
+    idx = Index(":memory:")
+    idx.add_document("/x/ml.md", "機械学習はデータからモデルを学習する分野である。")
+    assert idx.search(query.to_fts_query("機械学習 AND"))
+    assert idx.search(query.to_fts_query("NOT 機械学習"))
+    assert idx.search(query.to_fts_query("AND")) == []
+    idx.close()
+
+
+def test_search_malformed_fts_returns_empty():
+    idx = Index(":memory:")
+    idx.add_document("/x/ml.md", "機械学習")
+    assert idx.search('"foo" AND') == []
+    idx.close()
+
+
+def test_search_non_syntax_db_error_is_not_swallowed():
+    """構文エラー以外の OperationalError(テーブル欠落等)は空結果に化けない。"""
+    idx = Index(":memory:")
+    idx.conn.execute("DROP TABLE chunks_fts")
+    with pytest.raises(sqlite3.OperationalError):
+        idx.search('"foo"')
+    idx.close()
