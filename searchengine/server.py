@@ -230,27 +230,23 @@ def index_files(req: IndexRequest) -> IndexResponse:
     if not target.exists():
         raise HTTPException(status_code=400, detail=f"パスが存在しません: {req.path}")
 
-    idx = _open_index(want_vector=req.vector)
     count = failed = 0
-    with track_index():
-        try:
-            for path in ingest.iter_files(str(target), allowed_index_dirs()):
-                try:
-                    text = ingest.read_text(path)
-                    idx.add_document(
-                        path,
-                        text,
-                        doc_type=ingest.detect_type(path) or "text",
-                        mtime=os.path.getmtime(path),
-                    )
-                except Exception:  # 1ファイルの失敗で後続を止めない (#113)
-                    logger.exception("インデックス失敗: %s", path)
-                    failed += 1
-                    continue
-                count += 1
-            s = idx.stats()
-        finally:
-            idx.close()
+    with _open_index(want_vector=req.vector) as idx, track_index():
+        for path in ingest.iter_files(str(target), allowed_index_dirs()):
+            try:
+                text = ingest.read_text(path)
+                idx.add_document(
+                    path,
+                    text,
+                    doc_type=ingest.detect_type(path) or "text",
+                    mtime=os.path.getmtime(path),
+                )
+            except Exception:  # 1ファイルの失敗で後続を止めない (#113)
+                logger.exception("インデックス失敗: %s", path)
+                failed += 1
+                continue
+            count += 1
+        s = idx.stats()
 
     update_index_gauges(s["documents"], s["chunks"])
     return IndexResponse(
@@ -275,11 +271,10 @@ def search(
         raise HTTPException(status_code=400, detail="クエリが空です")
 
     want_vector = mode in ("vector", "hybrid", "nugget")
-    idx = _open_index(want_vector=want_vector)
-    parsed = query.parse(q)
+    with _open_index(want_vector=want_vector) as idx:
+        parsed = query.parse(q)
 
-    with track_search(mode):
-        try:
+        with track_search(mode):
             if mode == "keyword":
                 hits = [
                     (h, h.score) for h in idx.search(parsed.fts, limit=n, filters=parsed.filters)
@@ -302,8 +297,6 @@ def search(
             else:
                 fused = hybrid.search(idx, parsed, limit=n)
                 hits = [(f.hit, f.rrf) for f in fused]
-        finally:
-            idx.close()
 
     results = [
         SearchHit(
@@ -321,11 +314,8 @@ def search(
 @app.get("/stats", response_model=StatsResponse, dependencies=[Depends(require_api_key)])
 def stats() -> StatsResponse:
     """インデックスの統計情報を返す。"""
-    idx = _open_index()
-    try:
+    with _open_index() as idx:
         s = idx.stats()
-    finally:
-        idx.close()
     return StatsResponse(
         documents=s["documents"],
         chunks=s["chunks"],
