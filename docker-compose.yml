@@ -24,7 +24,7 @@ services:
       - QDRANT_URL=${QDRANT_URL:-}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-search-engine-docs}
       - EMBEDDING_URL=${EMBEDDING_URL:-}
-      - ALLOWED_INDEX_DIRS=${ALLOWED_INDEX_DIRS:-/data}
+      - ALLOWED_INDEX_DIRS=/data
       - API_KEY=${API_KEY:-}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]

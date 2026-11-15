@@ -49,6 +49,8 @@ def test_compose_pins_db_paths_under_data():
     text = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
     assert "SEARCH_DB=/data/" in text
     assert "SCHEMA_DB=/data/" in text
+    # .env の ./sample_docs がコンテナに入らない(補間でなく固定)
+    assert "- ALLOWED_INDEX_DIRS=/data\n" in text
 
 
 def test_readme_quickstart_loads_env_file():
