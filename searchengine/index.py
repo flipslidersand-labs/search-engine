@@ -187,6 +187,14 @@ class Index:
         snippet = (row[1][:120] + " …") if row and len(row[1]) > 120 else (row[1] if row else "")
         return Hit(doc_id=doc_id, path=path, chunk_index=chunk_index, snippet=snippet, score=score)
 
+    def get_chunk_text(self, doc_id: str, chunk_index: int) -> str | None:
+        """チャンク原文(切り詰め・マーカーなし)を返す。存在しなければ None。"""
+        row = self.conn.execute(
+            "SELECT original FROM chunks_fts WHERE doc_id = ? AND chunk_index = ?",
+            (doc_id, chunk_index),
+        ).fetchone()
+        return row[0] if row else None
+
     def stats(self) -> dict:
         docs = self.conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
         chunks = self.conn.execute("SELECT COUNT(*) FROM chunks_fts").fetchone()[0]

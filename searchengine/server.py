@@ -294,7 +294,10 @@ def search(
                 fused = hybrid.search(idx, parsed, limit=n)
                 hits = [(f.hit, f.rrf) for f in fused]
                 for h, _ in hits:
-                    h.snippet = extract_nuggets(q, h.snippet, top_k=nuggets_per_chunk)
+                    full = idx.get_chunk_text(h.doc_id, h.chunk_index)
+                    if full is None:
+                        full = h.snippet
+                    h.snippet = extract_nuggets(q, full, top_k=nuggets_per_chunk)
             else:
                 fused = hybrid.search(idx, parsed, limit=n)
                 hits = [(f.hit, f.rrf) for f in fused]
