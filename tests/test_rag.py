@@ -112,7 +112,7 @@ def test_ask_hybrid_mode(indexed_db: str):
     with patch("httpx.post", return_value=_mock_ollama_response("ハイブリッド検索の回答")):
         idx = Index(indexed_db)
         try:
-            result = ask(idx, "検索統合", mode="hybrid", top_k=3)
+            result = ask(idx, "RRF", mode="hybrid", top_k=3)
         finally:
             idx.close()
 
@@ -159,7 +159,7 @@ def test_ask_endpoint_ollama_error(indexed_client):
     with patch("httpx.post", side_effect=httpx_module.ConnectError("Ollama 未起動")):
         r = indexed_client.post(
             "/ask",
-            json={"question": "テスト", "mode": "keyword"},
+            json={"question": "RRF", "mode": "keyword"},
         )
 
     assert r.status_code == 500
@@ -176,7 +176,7 @@ def test_ask_endpoint_custom_model(indexed_client):
     ) as mock_post:
         r = indexed_client.post(
             "/ask",
-            json={"question": "テスト", "mode": "keyword", "model": "llama3:8b"},
+            json={"question": "RRF", "mode": "keyword", "model": "llama3:8b"},
         )
 
     assert r.status_code == 200
@@ -190,7 +190,7 @@ def test_ask_endpoint_custom_ollama_url(indexed_client, monkeypatch):
         r = indexed_client.post(
             "/ask",
             json={
-                "question": "テスト",
+                "question": "RRF",
                 "mode": "keyword",
                 "ollama_url": "http://example.internal:11434",
             },
@@ -206,7 +206,7 @@ def test_ask_endpoint_rejects_ollama_url_without_allowlist(indexed_client, monke
     r = indexed_client.post(
         "/ask",
         json={
-            "question": "テスト",
+            "question": "RRF",
             "mode": "keyword",
             "ollama_url": "http://169.254.169.254",
         },
@@ -219,9 +219,27 @@ def test_ask_endpoint_rejects_ollama_url_outside_allowlist(indexed_client, monke
     r = indexed_client.post(
         "/ask",
         json={
-            "question": "テスト",
+            "question": "RRF",
             "mode": "keyword",
             "ollama_url": "http://169.254.169.254",
         },
     )
     assert r.status_code == 403
+
+
+def test_ask_no_sources_does_not_call_llm(tmp_path):
+    idx = Index(str(tmp_path / "empty.db"))
+    try:
+        with patch("httpx.post") as mock_post:
+            result = ask(idx, "存在しない語", mode="keyword", top_k=3)
+    finally:
+        idx.close()
+    mock_post.assert_not_called()
+    assert result.sources == []
+    assert "見つかりませんでした" in result.answer
+
+
+def test_clamp_top_k():
+    from searchengine.mcp_server import _clamp_top_k
+
+    assert [_clamp_top_k(v) for v in (-1, 0, 5, 21, "99")] == [1, 1, 5, 20, 20]
