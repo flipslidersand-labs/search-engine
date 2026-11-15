@@ -18,12 +18,13 @@ services:
         required: false
     environment:
       - SEARCH_DB=/data/search.db
+      - SCHEMA_DB=/data/schemas.db
       - OLLAMA_URL=${OLLAMA_URL:-http://localhost:11434}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:7b}
       - QDRANT_URL=${QDRANT_URL:-}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-search-engine-docs}
       - EMBEDDING_URL=${EMBEDDING_URL:-}
-      - ALLOWED_INDEX_DIRS=${ALLOWED_INDEX_DIRS:-/data}
+      - ALLOWED_INDEX_DIRS=/data
       - API_KEY=${API_KEY:-}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]

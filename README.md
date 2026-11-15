@@ -77,7 +77,7 @@ EMBEDDING_URL=http://<embedding-host>:9092 \
 
 # Start server / サーバー起動
 cp .env.example .env
-uvicorn searchengine.server:app --reload --port 8000
+uvicorn searchengine.server:app --reload --port 8000 --env-file .env
 ```
 
 ---
@@ -137,6 +137,16 @@ No auth required. Returns `search_requests_total`, `search_latency_seconds`, etc
 | `OLLAMA_MODEL` | `qwen2.5:7b` | Model for RAG |
 | `EMBEDDING_URL` | (unset = local fallback) | RemoteEmbedder endpoint |
 | `QDRANT_URL` | (unset = SQLite) | Qdrant server URL |
+| `QDRANT_COLLECTION` | `search-engine-docs` | Qdrant collection |
+| `QDRANT_VECTOR_SIZE` | `768` | Qdrant vector size |
+| `EMBEDDING_COLLECTION` | `search-engine` | RemoteEmbedder collection |
+| `EMBEDDING_API_KEY` | (unset) | RemoteEmbedder API key |
+| `SCHEMA_DB` | `schemas.db` | schema_gen DB path / schema_gen DB パス |
+| `ALLOWED_OLLAMA_HOSTS` | (unset = override denied) | Comma-separated hosts allowed for `ollama_url` override / `ollama_url` 上書き許可ホスト |
+| `SEARCH_ENGINE_CONTEXTUAL_PREFIX` | (unset) | Enable contextual prefix indexing / コンテキスト付与 |
+| `DISCORD_WEBHOOK_COMPLETION` | (unset) | Discord completion webhook (optional) |
+| `DISCORD_WEBHOOK_ERRORS` | (unset) | Discord error webhook (optional) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | (unset) | Service account JSON path for Sheets / Sheets 用認証 JSON |
 
 ---
 
