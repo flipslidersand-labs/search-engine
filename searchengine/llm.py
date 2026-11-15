@@ -17,6 +17,10 @@ _DEFAULT_MODEL = "qwen2.5:7b"
 _TIMEOUT = 120.0
 
 
+class LLMError(Exception):
+    """LLM バックエンド呼び出しの失敗(HTTP 層の例外を包む)。"""
+
+
 @dataclass
 class Message:
     role: str  # "system" | "user" | "assistant"
@@ -49,12 +53,15 @@ class OllamaClient:
             "stream": False,
         }
         t0 = time.monotonic()
-        resp = httpx.post(
-            f"{self.base_url}/api/chat",
-            json=payload,
-            timeout=self.timeout,
-        )
-        resp.raise_for_status()
+        try:
+            resp = httpx.post(
+                f"{self.base_url}/api/chat",
+                json=payload,
+                timeout=self.timeout,
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as e:
+            raise LLMError(str(e)) from e
         latency_ms = int((time.monotonic() - t0) * 1000)
         data = resp.json()
         content: str = data["message"]["content"]
