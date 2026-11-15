@@ -249,3 +249,30 @@ def test_api_key_stats_protected(client, monkeypatch):
     monkeypatch.setenv("API_KEY", "secret123")
     r = client.get("/stats")
     assert r.status_code == 401
+
+
+def test_index_skips_symlink_pointing_outside_allowed(client, tmp_path, monkeypatch):
+    """許可ディレクトリ内の symlink が範囲外ファイルを指す場合は取り込まない(#119)。"""
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("TOPSECRETWORD", encoding="utf-8")
+    (allowed / "ok.txt").write_text("normal content", encoding="utf-8")
+    (allowed / "x.txt").symlink_to(outside / "secret.txt")
+    monkeypatch.setenv("ALLOWED_INDEX_DIRS", str(allowed))
+    r = client.post("/index", json={"path": str(allowed)})
+    assert r.status_code == 200
+    assert r.json()["indexed"] == 1
+    r = client.get("/search", params={"q": "TOPSECRETWORD"})
+    assert r.status_code == 200
+    assert r.json()["total"] == 0
+
+
+def test_validate_index_path_rejects_empty_entries(tmp_path, monkeypatch):
+    """ALLOWED_INDEX_DIRS=':' のような空指定は未設定扱いで拒否される。"""
+    from searchengine.security import PathNotAllowedError, validate_index_path
+
+    monkeypatch.setenv("ALLOWED_INDEX_DIRS", ":")
+    with pytest.raises(PathNotAllowedError, match="未設定"):
+        validate_index_path(str(tmp_path))
