@@ -60,6 +60,22 @@ def test_bm25_scores_relevant_sentence_higher():
     assert scores[0] == max(scores)
 
 
+def test_bm25_idf_uses_document_frequency():
+    # "rare" appears in one sentence only; "common" appears in every sentence.
+    # Each matching sentence has tf=1 and equal length, so only IDF differs.
+    sentences = ["rare alpha", "common beta", "common gamma", "common delta"]
+    rare = bm25_scores("rare", sentences)[0]
+    common = bm25_scores("common", sentences)[1]
+    assert rare > common
+
+
+def test_bm25_idf_term_in_all_sentences_is_low():
+    sentences = ["common alpha", "common beta", "common gamma", "common delta"]
+    all_df = bm25_scores("common", sentences)[0]
+    one_df = bm25_scores("alpha", sentences)[0]
+    assert one_df > 2 * all_df
+
+
 def test_bm25_scores_all_floats():
     sentences = ["foo bar", "baz qux"]
     scores = bm25_scores("foo", sentences)
