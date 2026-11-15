@@ -258,3 +258,23 @@ def test_clamp_top_k():
     from searchengine.mcp_server import _clamp_top_k
 
     assert [_clamp_top_k(v) for v in (-1, 0, 5, 21, "99")] == [1, 1, 5, 20, 20]
+
+
+@pytest.mark.parametrize("mode", ["vector", "hybrid"])
+def test_ask_endpoint_embedder_http_error(indexed_client, mode):
+    """RemoteEmbedder 相当の httpx エラーも「Ollama エラー」の 500 になる。"""
+    import httpx as httpx_module
+
+    def _open(**_kw):
+        idx = Index(server._DB_PATH)
+        idx.vectors = MagicMock()  # hybrid がベクトル経路に入るようにする
+        return idx
+
+    with (
+        patch.object(server, "_open_index", side_effect=_open),
+        patch.object(Index, "vector_search", side_effect=httpx_module.ConnectError("埋め込み失敗")),
+    ):
+        r = indexed_client.post("/ask", json={"question": "RRF", "mode": mode})
+
+    assert r.status_code == 500
+    assert r.json()["detail"] == "Ollama エラー: 埋め込み失敗"

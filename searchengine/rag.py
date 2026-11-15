@@ -7,9 +7,11 @@ import time
 from dataclasses import dataclass
 from typing import Literal
 
+import httpx
+
 from . import hybrid, query
 from .index import Index
-from .llm import LLMResult, Message, OllamaClient
+from .llm import LLMError, LLMResult, Message, OllamaClient
 
 _DEFAULT_OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 _DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
@@ -67,26 +69,33 @@ def ask(
 
     parsed = query.parse(question)
 
-    if mode == "keyword":
-        hits = index.search(parsed.fts, limit=top_k, filters=parsed.filters)
-        sources = [
-            Source(path=h.path, chunk_index=h.chunk_index, snippet=h.snippet, score=h.score)
-            for h in hits
-        ]
-    elif mode == "vector":
-        hits = index.vector_search(parsed.raw, limit=top_k, filters=parsed.filters)
-        sources = [
-            Source(path=h.path, chunk_index=h.chunk_index, snippet=h.snippet, score=h.score)
-            for h in hits
-        ]
-    else:
-        fused = hybrid.search(index, parsed, limit=top_k)
-        sources = [
-            Source(
-                path=f.hit.path, chunk_index=f.hit.chunk_index, snippet=f.hit.snippet, score=f.rrf
-            )
-            for f in fused
-        ]
+    try:
+        if mode == "keyword":
+            hits = index.search(parsed.fts, limit=top_k, filters=parsed.filters)
+            sources = [
+                Source(path=h.path, chunk_index=h.chunk_index, snippet=h.snippet, score=h.score)
+                for h in hits
+            ]
+        elif mode == "vector":
+            hits = index.vector_search(parsed.raw, limit=top_k, filters=parsed.filters)
+            sources = [
+                Source(path=h.path, chunk_index=h.chunk_index, snippet=h.snippet, score=h.score)
+                for h in hits
+            ]
+        else:
+            fused = hybrid.search(index, parsed, limit=top_k)
+            sources = [
+                Source(
+                    path=f.hit.path,
+                    chunk_index=f.hit.chunk_index,
+                    snippet=f.hit.snippet,
+                    score=f.rrf,
+                )
+                for f in fused
+            ]
+    except httpx.HTTPError as e:
+        # RemoteEmbedder 経由のベクトル検索失敗も LLMError に統一する
+        raise LLMError(str(e)) from e
 
     if not sources:
         return AskResult(
