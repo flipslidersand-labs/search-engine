@@ -29,7 +29,7 @@ from . import hybrid, ingest
 from .index import Index
 from .query import parse as parse_query
 from .rag import ask as rag_ask
-from .security import validate_index_path
+from .security import allowed_index_dirs, validate_index_path
 
 _DB_PATH = os.environ.get("SEARCH_DB", "search.db")
 _OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
@@ -209,7 +209,7 @@ def create_server() -> Server:
                 validate_index_path(args["path"])
                 idx = _open_index(want_vector=want_vector)
                 indexed = 0
-                for file_path in ingest.iter_files(args["path"]):
+                for file_path in ingest.iter_files(args["path"], allowed_index_dirs()):
                     doc_type = ingest.detect_type(file_path)
                     if doc_type is None:
                         continue
