@@ -334,3 +334,12 @@ def test_search_nugget_uses_full_chunk_text(client, tmp_path, monkeypatch):
     snippet = r.json()["results"][0]["snippet"]
     assert "zanzibar protocol requires quorum" in snippet
     assert "[" not in snippet and "]" not in snippet
+
+
+# ── /ask top_k 検証 (#133) ────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("bad", [0, -1, 21])
+def test_ask_top_k_out_of_range_422(client, bad):
+    r = client.post("/ask", json={"question": "q", "top_k": bad})
+    assert r.status_code == 422

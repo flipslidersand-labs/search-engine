@@ -20,6 +20,8 @@ _SYSTEM_PROMPT = """\
 文書に情報がない場合は「提供された文書には情報が見つかりませんでした」と答えてください。
 """
 
+NO_SOURCES_ANSWER = "提供された文書には情報が見つかりませんでした"
+
 _USER_TEMPLATE = """\
 [参考文書]
 {context}
@@ -60,6 +62,7 @@ def ask(
     2. チャンクを結合してプロンプトを組み立て
     3. Ollama に送信して回答を生成
     """
+    top_k = max(1, min(20, top_k))
     t0 = time.monotonic()
 
     parsed = query.parse(question)
@@ -84,6 +87,14 @@ def ask(
             )
             for f in fused
         ]
+
+    if not sources:
+        return AskResult(
+            answer=NO_SOURCES_ANSWER,
+            sources=[],
+            model=model,
+            latency_ms=int((time.monotonic() - t0) * 1000),
+        )
 
     context = "\n\n---\n\n".join(f"[{i + 1}] {s.path}\n{s.snippet}" for i, s in enumerate(sources))
 

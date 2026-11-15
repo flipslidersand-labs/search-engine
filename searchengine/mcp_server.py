@@ -36,6 +36,11 @@ _OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 _OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
 
 
+def _clamp_top_k(value: object) -> int:
+    """top_k を 1..20 にクランプする（負数・0 での全件取得を防ぐ）。"""
+    return max(1, min(20, int(value)))  # type: ignore[call-overload]
+
+
 def _make_text(text: str) -> list[types.TextContent]:
     return [types.TextContent(type="text", text=text)]
 
@@ -145,7 +150,7 @@ def create_server() -> Server:
                 mode: Literal["keyword", "vector", "hybrid"] = args.get("mode", "hybrid")
                 want_vector = mode in ("vector", "hybrid")
                 idx = _open_index(want_vector=want_vector)
-                top_k: int = int(args.get("top_k", 5))
+                top_k: int = _clamp_top_k(args.get("top_k", 5))
                 parsed = parse_query(args["query"])
 
                 if mode == "keyword":
@@ -185,7 +190,7 @@ def create_server() -> Server:
                     idx,
                     args["question"],
                     mode=mode,
-                    top_k=int(args.get("top_k", 5)),
+                    top_k=_clamp_top_k(args.get("top_k", 5)),
                     ollama_url=_OLLAMA_URL,
                     model=args.get("model", _OLLAMA_MODEL),
                 )

@@ -29,7 +29,7 @@ from fastapi import (  # pylint: disable=import-error
 )
 from fastapi.responses import HTMLResponse  # pylint: disable=import-error
 from fastapi.security.api_key import APIKeyHeader  # pylint: disable=import-error
-from pydantic import BaseModel  # pylint: disable=import-error
+from pydantic import BaseModel, Field  # pylint: disable=import-error
 
 from . import hybrid, ingest, query, tokenizer
 from .index import Index
@@ -148,7 +148,7 @@ class AskRequest(BaseModel):
     question: str
     mode: Literal["keyword", "vector", "hybrid"] = "hybrid"
     model: str = "qwen2.5:7b"
-    top_k: int = 5
+    top_k: int = Field(5, ge=1, le=20)
     ollama_url: str | None = None
 
 
