@@ -183,7 +183,11 @@ class SchemaStore:
         if field and field not in valid_fields:
             raise ValueError(f"field must be one of {valid_fields}, got {field!r}")
 
-        fts_q = f"{field}:{q}" if field else q
+        # 各語を引用符で囲んで FTS5 演算子・構文として解釈させない
+        terms = " ".join('"' + t.replace('"', '""') + '"' for t in q.split())
+        if not terms:
+            return []
+        fts_q = f"{field}:({terms})" if field else terms
 
         with self._conn() as conn:
             rows = conn.execute(

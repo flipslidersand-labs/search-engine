@@ -156,7 +156,7 @@ def render_sql_with_fk(
     """FK 制約付き CREATE TABLE SQL を生成する。"""
     pk_candidates = [c for c in columns if c.pk_candidate]
 
-    lines = [f"CREATE TABLE {table_name} ("]
+    lines = [f"CREATE TABLE {_sql_id(table_name)} ("]
     col_lines = []
 
     for c in columns:
@@ -169,7 +169,7 @@ def render_sql_with_fk(
 
     for r in relations:
         col_lines.append(
-            f"    FOREIGN KEY ({_sql_id(r.from_col)}) REFERENCES {r.ref_table} ({r.ref_col})"
+            f"    FOREIGN KEY ({_sql_id(r.from_col)}) REFERENCES {_sql_id(r.ref_table)} ({_sql_id(r.ref_col)})"
         )
 
     lines.append(",\n".join(col_lines))
@@ -183,4 +183,4 @@ def _mermaid_id(name: str) -> str:
 
 
 def _sql_id(name: str) -> str:
-    return f'"{name}"' if not name.isidentifier() or name[0].isdigit() else name
+    return '"' + name.replace('"', '""') + '"'
