@@ -77,7 +77,7 @@ EMBEDDING_URL=http://<embedding-host>:9092 \
 
 # Start server / サーバー起動
 cp .env.example .env
-uvicorn searchengine.server:app --reload --port 8000
+uvicorn searchengine.server:app --reload --port 8000 --env-file .env
 ```
 
 ---

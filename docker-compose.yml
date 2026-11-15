@@ -18,6 +18,7 @@ services:
         required: false
     environment:
       - SEARCH_DB=/data/search.db
+      - SCHEMA_DB=/data/schemas.db
       - OLLAMA_URL=${OLLAMA_URL:-http://localhost:11434}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:7b}
       - QDRANT_URL=${QDRANT_URL:-}

@@ -42,3 +42,17 @@ def test_readme_table_covers_code_env_vars():
     documented = set(re.findall(r"^\| `([A-Z][A-Z0-9_]*)` \|", readme, re.M))
     missing = _code_env_vars() - documented
     assert not missing, f"README 環境変数表に不足: {sorted(missing)}"
+
+
+def test_compose_pins_db_paths_under_data():
+    """.env を env_file で読んでも DB パスが read-only の /app に落ちない(#150 の再発防止)。"""
+    text = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "SEARCH_DB=/data/" in text
+    assert "SCHEMA_DB=/data/" in text
+
+
+def test_readme_quickstart_loads_env_file():
+    """uvicorn は .env を自動で読まないため、Quick Start は --env-file を付ける。"""
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "uvicorn searchengine.server:app" in readme
+    assert "--env-file .env" in readme
