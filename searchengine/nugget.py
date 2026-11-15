@@ -31,6 +31,8 @@ def bm25_scores(query: str, sentences: list[str], k1: float = 1.5, b: float = 0.
     tokenized = [_tokenize(s) for s in sentences]
     avgdl = sum(len(t) for t in tokenized) / len(tokenized)
     q_terms = _tokenize(query)
+    n = len(sentences)
+    df = Counter(term for doc in tokenized for term in set(doc))
     scores = []
     for doc in tokenized:
         tf = Counter(doc)
@@ -38,7 +40,8 @@ def bm25_scores(query: str, sentences: list[str], k1: float = 1.5, b: float = 0.
         score = 0.0
         for term in q_terms:
             f = tf.get(term, 0)
-            idf = math.log(1 + (len(sentences) - f + 0.5) / (f + 0.5))
+            n_t = df.get(term, 0)
+            idf = math.log(1 + (n - n_t + 0.5) / (n_t + 0.5))
             numerator = f * (k1 + 1)
             denominator = f + k1 * (1 - b + b * dl / max(avgdl, 1))
             score += idf * (numerator / denominator)
