@@ -157,6 +157,15 @@ No auth required. Returns `search_requests_total`, `search_latency_seconds`, etc
 
 ---
 
+## Dependency lock / 依存の固定
+
+Dockerfile と CI は `requirements.lock.txt` から install する（pytest・pytest-cov は CI で別途追加）。
+`requirements.txt` を変えたら lock を再生成する:
+
+```bash
+pip-compile --no-index --output-file=requirements.lock.txt requirements.txt
+```
+
 ## Tests / テスト
 
 ```bash
