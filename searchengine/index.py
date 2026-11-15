@@ -164,9 +164,13 @@ class Index:
         )
         try:
             rows = self.conn.execute(sql, [fts_query, *fparams, limit]).fetchall()
-        except sqlite3.OperationalError:
-            # FTS5 構文エラー(演算子のみ等)は 500 にせず空結果 (#127)
-            return []
+        except sqlite3.OperationalError as e:
+            # FTS5 のクエリ構文エラー(演算子のみ等)だけ空結果にする (#127)。
+            # テーブル欠落・ロック・I/O 障害などは隠さず送出する。
+            msg = str(e).lower()
+            if "fts5" in msg or "malformed match" in msg or "unterminated string" in msg:
+                return []
+            raise
         return [
             Hit(doc_id=r[0], path=r[1], chunk_index=r[2], snippet=r[3], score=r[4]) for r in rows
         ]

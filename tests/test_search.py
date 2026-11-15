@@ -1,6 +1,7 @@
 """Phase 1 のスモークテスト。stdlib のみで動作する。"""
 
 import os
+import sqlite3
 import sys
 from unittest.mock import MagicMock, patch
 
@@ -267,4 +268,13 @@ def test_search_malformed_fts_returns_empty():
     idx = Index(":memory:")
     idx.add_document("/x/ml.md", "機械学習")
     assert idx.search('"foo" AND') == []
+    idx.close()
+
+
+def test_search_non_syntax_db_error_is_not_swallowed():
+    """構文エラー以外の OperationalError(テーブル欠落等)は空結果に化けない。"""
+    idx = Index(":memory:")
+    idx.conn.execute("DROP TABLE chunks_fts")
+    with pytest.raises(sqlite3.OperationalError):
+        idx.search('"foo"')
     idx.close()
