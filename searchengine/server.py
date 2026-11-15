@@ -41,7 +41,7 @@ from .metrics import (
     update_index_gauges,
 )
 from .schema_gen.api import router as schema_router
-from .security import PathNotAllowedError, validate_index_path
+from .security import PathNotAllowedError, allowed_index_dirs, validate_index_path
 
 logger = logging.getLogger(__name__)
 
@@ -233,7 +233,7 @@ def index_files(req: IndexRequest) -> IndexResponse:
     count = failed = 0
     with track_index():
         try:
-            for path in ingest.iter_files(str(target)):
+            for path in ingest.iter_files(str(target), allowed_index_dirs()):
                 try:
                     text = ingest.read_text(path)
                     idx.add_document(
