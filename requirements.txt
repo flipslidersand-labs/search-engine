@@ -22,10 +22,10 @@ uvicorn[standard]>=0.29
 httpx>=0.27
 
 # Phase 4（MCP サーバー）:
-mcp>=2.0
+mcp>=2.0,<3
 
 # Phase 5（Qdrant ベクトルストア）:
-# qdrant-client>=1.9
+# qdrant-client は requirements-optional.txt を参照
 
 # Phase 6（観測点）:
 prometheus-client>=0.20
