@@ -65,6 +65,9 @@ Storage: SQLite (FTS5 + BLOB vectors) / Qdrant (optional)
 ```bash
 pip install -r requirements.txt
 
+# Optional features (Qdrant / Excel / Google Sheets / fugashi) / 任意機能
+pip install -r requirements-optional.txt
+
 # Keyword index only / キーワードのみ
 python3 -m searchengine.cli index ./sample_docs --db search.db
 
