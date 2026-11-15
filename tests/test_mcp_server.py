@@ -216,3 +216,17 @@ def test_db_argument_is_ignored_and_not_in_schema(tmp_path: Path, tmp_db: str):
     result = call_tool("stats", {"db": str(evil)})
     assert result["db"] == tmp_db
     assert not evil.exists()
+
+
+def test_index_skips_symlink_pointing_outside_allowed(tmp_path: Path, tmp_db: str, monkeypatch):
+    """MCP index でも範囲外を指す symlink はスキップされる(#119)。"""
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("TOPSECRETWORD", encoding="utf-8")
+    (allowed / "ok.txt").write_text("normal content", encoding="utf-8")
+    (allowed / "x.txt").symlink_to(outside / "secret.txt")
+    monkeypatch.setenv("ALLOWED_INDEX_DIRS", str(allowed))
+    result = call_tool("index", {"path": str(allowed)})
+    assert result["indexed"] == 1

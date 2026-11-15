@@ -6,7 +6,11 @@ PDF・メールは Phase 1 では拡張ポイントとして関数を用意の�
 
 from __future__ import annotations
 
+import logging
 import os
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 TEXT_EXTS = {
     ".md": "markdown",
@@ -28,8 +32,16 @@ def read_text(path: str) -> str:
         return f.read()
 
 
-def iter_files(root: str):
-    """対応拡張子のファイルを再帰列挙。"""
+def _within(path: str, allowed: list[Path]) -> bool:
+    resolved = Path(path).resolve()
+    return any(resolved.is_relative_to(d) for d in allowed)
+
+
+def iter_files(root: str, allowed: list[Path] | None = None):
+    """対応拡張子のファイルを再帰列挙。
+
+    allowed を渡すと、symlink を解決した実体がその範囲外のファイルはスキップする。
+    """
     if os.path.isfile(root):
         if detect_type(root):
             yield root
@@ -39,5 +51,9 @@ def iter_files(root: str):
         dirnames[:] = [d for d in dirnames if d not in {".git", "node_modules", "__pycache__"}]
         for name in filenames:
             full = os.path.join(dirpath, name)
-            if detect_type(full):
-                yield full
+            if not detect_type(full):
+                continue
+            if allowed is not None and not _within(full, allowed):
+                logger.warning("許可範囲外を指す symlink をスキップ: %s", full)
+                continue
+            yield full
