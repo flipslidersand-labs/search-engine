@@ -99,7 +99,10 @@ def _emit_tokens(text: str) -> list[str]:
         if low in _BOOL:
             result.append(_BOOL[low])
         else:
-            result.extend(_quote_terms(word))
+            # 1 語 = 1 要素（bigram 全体を AND 連結した群）。群単位で NOT を扱うため (#169)
+            terms = _quote_terms(word)
+            if terms:
+                result.append(" AND ".join(terms))
     return result
 
 
@@ -138,9 +141,18 @@ def _normalize_ops(parts: list[str]) -> list[str]:
     while out and out[0] in ("AND", "OR"):
         out.pop(0)
     if out and out[0] == "NOT":
-        # FTS5 は先頭 NOT 不可。`NOT a b` → `b NOT a`（否定を保つ）。肯定語が無ければ空。
-        neg, rest = out[1:2], out[2:]
-        while rest and rest[0] in _OPS:
-            rest.pop(0)
-        out = [*rest, "NOT", *neg] if rest and neg else []
+        # FTS5 は先頭 NOT 不可。先頭の NOT 句をすべて後ろへ回す:
+        #   `NOT a NOT b c` → `c NOT a NOT b`。肯定語が無ければ空。
+        # 先頭 NOT 句の直後の AND/OR は捨てる（`NOT a OR b` → `b NOT a`）。
+        negs: list[str] = []
+        while len(out) >= 2 and out[0] == "NOT" and out[1] not in _OPS:
+            neg = out[1]
+            negs.append(f"({neg})" if " AND " in neg else neg)
+            out = out[2:]
+        while out and out[0] in ("AND", "OR"):
+            out.pop(0)
+        if not out or out[0] == "NOT" or not negs:
+            return []
+        for n in negs:
+            out += ["NOT", n]
     return out

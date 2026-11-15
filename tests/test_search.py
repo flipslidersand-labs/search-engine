@@ -334,3 +334,40 @@ def test_cli_db_sets_env_before_uvicorn(monkeypatch):
     server._cli()
     assert seen["env"] == "/tmp/x169.db"
     monkeypatch.delenv("SEARCH_DB", raising=False)
+
+
+def _leading_not_paths(q, docs):
+    idx = Index(":memory:")
+    for path, text in docs.items():
+        idx.add_document(path, text)
+    paths = {r.path for r in idx.search(query.to_fts_query(q))}
+    idx.close()
+    return paths
+
+
+def test_leading_not_multiple_negations():
+    docs = {
+        "/x/a.md": "machine basics",
+        "/x/b.md": "deep basics",
+        "/x/c.md": "plain basics",
+    }
+    assert _leading_not_paths("NOT machine NOT deep basics", docs) == {"/x/c.md"}
+
+
+def test_leading_not_japanese_negated_word_is_whole_group():
+    docs = {
+        "/x/a.md": "機械学習 入門",
+        "/x/b.md": "深層学習 入門",
+    }
+    assert _leading_not_paths("NOT 機械学習 入門", docs) == {"/x/b.md"}
+
+
+def test_leading_not_only_negatives_empty_english():
+    assert _leading_not_paths("NOT a", {"/x/a.md": "a b"}) == set()
+    assert _leading_not_paths("NOT a NOT b", {"/x/a.md": "c"}) == set()
+
+
+def test_leading_not_or_is_dropped_not_syntax_error():
+    # `NOT a OR b` は OR を保持せず `b NOT a` として扱う（仕様固定）
+    docs = {"/x/a.md": "a b", "/x/b.md": "b c"}
+    assert _leading_not_paths("NOT a OR b", docs) == {"/x/b.md"}
