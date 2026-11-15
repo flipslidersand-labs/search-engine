@@ -213,6 +213,41 @@ def test_api_key_not_set_allows_all(client, sample_dir, monkeypatch):
     assert r.status_code == 200
 
 
+def test_api_key_unset_fails_closed(client, monkeypatch):
+    monkeypatch.delenv("API_KEY", raising=False)
+    monkeypatch.delenv("ALLOW_NO_AUTH", raising=False)
+    r = client.get("/search", params={"q": "test"})
+    assert r.status_code == 401
+
+
+def test_api_key_empty_fails_closed(client, monkeypatch):
+    monkeypatch.setenv("API_KEY", "")
+    monkeypatch.delenv("ALLOW_NO_AUTH", raising=False)
+    r = client.get("/stats", headers={"X-API-Key": ""})
+    assert r.status_code == 401
+
+
+def test_api_key_unset_allow_no_auth_flag(client, monkeypatch):
+    monkeypatch.delenv("API_KEY", raising=False)
+    monkeypatch.setenv("ALLOW_NO_AUTH", "1")
+    r = client.get("/stats")
+    assert r.status_code == 200
+
+
+def test_api_key_set_ignores_allow_no_auth(client, monkeypatch):
+    monkeypatch.setenv("API_KEY", "secret123")
+    monkeypatch.setenv("ALLOW_NO_AUTH", "1")
+    r = client.get("/stats", headers={"X-API-Key": "wrong"})
+    assert r.status_code == 401
+
+
+def test_api_key_non_ascii_and_length_mismatch(client, monkeypatch):
+    monkeypatch.setenv("API_KEY", "secret123")
+    for bad in ("s", "secret123-longer", "秘密キー"):
+        r = client.get("/stats", headers={"X-API-Key": bad.encode("utf-8")})
+        assert r.status_code == 401
+
+
 def test_api_key_valid(client, monkeypatch):
     monkeypatch.setenv("API_KEY", "secret123")
     r = client.get("/search", params={"q": "test"}, headers={"X-API-Key": "secret123"})
@@ -249,3 +284,30 @@ def test_api_key_stats_protected(client, monkeypatch):
     monkeypatch.setenv("API_KEY", "secret123")
     r = client.get("/stats")
     assert r.status_code == 401
+
+
+def test_index_skips_symlink_pointing_outside_allowed(client, tmp_path, monkeypatch):
+    """許可ディレクトリ内の symlink が範囲外ファイルを指す場合は取り込まない(#119)。"""
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("TOPSECRETWORD", encoding="utf-8")
+    (allowed / "ok.txt").write_text("normal content", encoding="utf-8")
+    (allowed / "x.txt").symlink_to(outside / "secret.txt")
+    monkeypatch.setenv("ALLOWED_INDEX_DIRS", str(allowed))
+    r = client.post("/index", json={"path": str(allowed)})
+    assert r.status_code == 200
+    assert r.json()["indexed"] == 1
+    r = client.get("/search", params={"q": "TOPSECRETWORD"})
+    assert r.status_code == 200
+    assert r.json()["total"] == 0
+
+
+def test_validate_index_path_rejects_empty_entries(tmp_path, monkeypatch):
+    """ALLOWED_INDEX_DIRS=':' のような空指定は未設定扱いで拒否される。"""
+    from searchengine.security import PathNotAllowedError, validate_index_path
+
+    monkeypatch.setenv("ALLOWED_INDEX_DIRS", ":")
+    with pytest.raises(PathNotAllowedError, match="未設定"):
+        validate_index_path(str(tmp_path))
