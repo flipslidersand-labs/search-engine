@@ -166,9 +166,9 @@ def _open_index(*, want_vector: bool = False) -> Index:
     db_path = _DB_PATH
     embedder = None
     if want_vector:
-        from .embedder import Embedder
+        from .embedder import create_embedder
 
-        embedder = Embedder()
+        embedder = create_embedder()
     use_contextual_prefix = os.environ.get("SEARCH_ENGINE_CONTEXTUAL_PREFIX", "").lower() in (
         "1",
         "true",
