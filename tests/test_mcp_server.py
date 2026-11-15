@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 from mcp import types
 
+from searchengine import mcp_server
 from searchengine.mcp_server import TOOLS, create_server
 
 # ── ヘルパー ──────────────────────────────────────────────────────────────────
@@ -41,13 +42,18 @@ def call_tool_raw(name: str, args: dict) -> types.CallToolResult:
 
 
 @pytest.fixture()
-def tmp_db(tmp_path: Path) -> str:
-    return str(tmp_path / "test.db")
+def tmp_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
+    db_path = str(tmp_path / "test.db")
+    monkeypatch.setattr(mcp_server, "_DB_PATH", db_path)
+    monkeypatch.setenv("ALLOWED_INDEX_DIRS", str(tmp_path))
+    return db_path
 
 
 @pytest.fixture()
-def indexed_db(tmp_path: Path) -> str:
+def indexed_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     db_path = str(tmp_path / "test.db")
+    monkeypatch.setattr(mcp_server, "_DB_PATH", db_path)
+    monkeypatch.setenv("ALLOWED_INDEX_DIRS", str(tmp_path))
     doc = tmp_path / "sample.md"
     doc.write_text("# Hello\n\nThis is a test document about Python.", encoding="utf-8")
 
@@ -79,7 +85,7 @@ def test_tools_have_required_fields():
 
 def test_stats_empty_db(tmp_db: str):
     """空の DB で stats を呼ぶと documents=0 / chunks=0 が返る。"""
-    result = call_tool("stats", {"db": tmp_db})
+    result = call_tool("stats", {})
     assert result["documents"] == 0
     assert result["chunks"] == 0
     assert result["db"] == tmp_db
@@ -87,7 +93,7 @@ def test_stats_empty_db(tmp_db: str):
 
 def test_stats_after_index(indexed_db: str):
     """インデックス後は documents >= 1。"""
-    result = call_tool("stats", {"db": indexed_db})
+    result = call_tool("stats", {})
     assert result["documents"] >= 1
 
 
@@ -99,7 +105,7 @@ def test_index_single_file(tmp_path: Path, tmp_db: str):
     doc = tmp_path / "doc.md"
     doc.write_text("# Test\n\nHello world.", encoding="utf-8")
 
-    result = call_tool("index", {"path": str(doc), "db": tmp_db})
+    result = call_tool("index", {"path": str(doc)})
     assert result["indexed"] == 1
     assert result["documents"] == 1
 
@@ -109,7 +115,7 @@ def test_index_unknown_extension(tmp_path: Path, tmp_db: str):
     doc = tmp_path / "file.xyz"
     doc.write_text("some content", encoding="utf-8")
 
-    result = call_tool("index", {"path": str(doc), "db": tmp_db})
+    result = call_tool("index", {"path": str(doc)})
     assert result["indexed"] == 0
 
 
@@ -118,7 +124,7 @@ def test_index_unknown_extension(tmp_path: Path, tmp_db: str):
 
 def test_search_keyword(indexed_db: str):
     """keyword モードで検索すると results が返る。"""
-    result = call_tool("search", {"query": "Python", "mode": "keyword", "db": indexed_db})
+    result = call_tool("search", {"query": "Python", "mode": "keyword"})
     assert result["mode"] == "keyword"
     assert result["query"] == "Python"
     assert isinstance(result["results"], list)
@@ -126,13 +132,13 @@ def test_search_keyword(indexed_db: str):
 
 def test_search_empty_db(tmp_db: str):
     """空の DB では results=[] で is_error にならない。"""
-    result = call_tool("search", {"query": "hello", "mode": "keyword", "db": tmp_db})
+    result = call_tool("search", {"query": "hello", "mode": "keyword"})
     assert result["results"] == []
 
 
 def test_search_result_fields(indexed_db: str):
     """ヒット結果に必須フィールドが含まれること。"""
-    result = call_tool("search", {"query": "test", "mode": "keyword", "db": indexed_db})
+    result = call_tool("search", {"query": "test", "mode": "keyword"})
     for hit in result["results"]:
         assert "rank" in hit
         assert "score" in hit
@@ -156,7 +162,7 @@ def test_unknown_tool_returns_error():
 
 def test_ask_returns_result_or_error(indexed_db: str):
     """Ollama 有無に関わらず、answer または error を含む JSON が返ること。"""
-    result = call_tool_raw("ask", {"question": "What is this doc about?", "db": indexed_db})
+    result = call_tool_raw("ask", {"question": "What is this doc about?"})
     payload = json.loads(result.content[0].text)
     if result.is_error:
         assert "error" in payload
@@ -164,3 +170,49 @@ def test_ask_returns_result_or_error(indexed_db: str):
         assert "answer" in payload
         assert "sources" in payload
         assert "model" in payload
+
+
+# ── index のパス・db 制限(#118) ───────────────────────────────────────────────
+
+
+def test_index_rejects_when_allowed_dirs_unset(tmp_path: Path, tmp_db: str, monkeypatch):
+    """ALLOWED_INDEX_DIRS 未設定は fail-closed。"""
+    monkeypatch.delenv("ALLOWED_INDEX_DIRS", raising=False)
+    doc = tmp_path / "doc.md"
+    doc.write_text("# x", encoding="utf-8")
+    result = call_tool_raw("index", {"path": str(doc)})
+    assert result.is_error
+    assert "ALLOWED_INDEX_DIRS" in json.loads(result.content[0].text)["error"]
+
+
+def test_index_rejects_outside_path(tmp_path: Path, tmp_db: str, monkeypatch):
+    """許可ディレクトリ外のパスは拒否される。"""
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    allowed.mkdir()
+    outside.mkdir()
+    (outside / "secret.md").write_text("# secret", encoding="utf-8")
+    monkeypatch.setenv("ALLOWED_INDEX_DIRS", str(allowed))
+    result = call_tool_raw("index", {"path": str(outside)})
+    assert result.is_error
+    assert "許可されていないパス" in json.loads(result.content[0].text)["error"]
+
+
+def test_index_rejects_traversal(tmp_path: Path, tmp_db: str, monkeypatch):
+    """.. を使ったトラバーサルは resolve 後に拒否される。"""
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    (tmp_path / "secret.md").write_text("# secret", encoding="utf-8")
+    monkeypatch.setenv("ALLOWED_INDEX_DIRS", str(allowed))
+    result = call_tool_raw("index", {"path": str(allowed / ".." / "secret.md")})
+    assert result.is_error
+
+
+def test_db_argument_is_ignored_and_not_in_schema(tmp_path: Path, tmp_db: str):
+    """db 引数はスキーマに無く、渡されても無視されて SEARCH_DB 固定になる。"""
+    for tool in TOOLS:
+        assert "db" not in tool.input_schema["properties"]
+    evil = tmp_path / "evil.db"
+    result = call_tool("stats", {"db": str(evil)})
+    assert result["db"] == tmp_db
+    assert not evil.exists()
