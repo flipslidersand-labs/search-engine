@@ -69,6 +69,12 @@ class Index:
     def close(self) -> None:
         self.conn.close()
 
+    def __enter__(self) -> "Index":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
     # --- インクリメンタル更新 (§2.5) ---
     def add_document(
         self, path: str, text: str, doc_type: str = "text", mtime: float | None = None
