@@ -278,3 +278,51 @@ def test_search_non_syntax_db_error_is_not_swallowed():
     with pytest.raises(sqlite3.OperationalError):
         idx.search('"foo"')
     idx.close()
+
+
+def _vec_count(idx: Index, path: str) -> int:
+    return idx.conn.execute(
+        "SELECT COUNT(*) FROM vectors WHERE doc_id=?", (_doc(path),)
+    ).fetchone()[0]
+
+
+def test_same_hash_reindex_with_embedder_builds_missing_vectors(tmp_path):
+    # FTS のみで索引 → 同じ本文を embedder 付きで再索引してもベクトルが作られない (#168)
+    db = str(tmp_path / "i.db")
+    text = "機械学習はデータからモデルを学習する。"
+    with Index(db) as idx:
+        idx.add_document("/x/a.md", text)
+    with Index(db, embedder=Embedder()) as idx:
+        assert _vec_count(idx, "/x/a.md") == 0
+        idx.add_document("/x/a.md", text)
+        assert _vec_count(idx, "/x/a.md") > 0
+        assert idx.vector_search("機械学習", limit=3)
+
+
+def test_reindex_without_embedder_drops_stale_vectors(tmp_path):
+    db = str(tmp_path / "i.db")
+    with Index(db, embedder=Embedder()) as idx:
+        idx.add_document("/x/a.md", "旧本文は機械学習について述べる。")
+    with Index(db) as idx:
+        idx.add_document("/x/a.md", "新本文はカレーの作り方である。")
+        n = idx.conn.execute("SELECT COUNT(*) FROM vectors WHERE doc_id=?", (_doc("/x/a.md"),))
+        assert n.fetchone()[0] == 0
+
+
+def test_remove_without_embedder_drops_vectors(tmp_path):
+    db = str(tmp_path / "i.db")
+    with Index(db, embedder=Embedder()) as idx:
+        idx.add_document("/x/a.md", "機械学習はデータからモデルを学習する。")
+    with Index(db) as idx:
+        idx.remove_document("/x/a.md")
+    with Index(db, embedder=Embedder()) as idx:
+        assert _vec_count(idx, "/x/a.md") == 0
+        assert idx.vector_search("機械学習", limit=3) == []
+
+
+def test_fts_only_index_does_not_create_vectors_table(tmp_path):
+    with Index(str(tmp_path / "i.db")) as idx:
+        idx.add_document("/x/a.md", "本文")
+        idx.remove_document("/x/a.md")
+        t = idx.conn.execute("SELECT name FROM sqlite_master WHERE name='vectors'").fetchall()
+        assert t == []
