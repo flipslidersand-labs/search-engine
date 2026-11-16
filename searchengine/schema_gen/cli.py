@@ -17,10 +17,9 @@ schema-gen CLI — CSV/Excel/Google Sheets 構造解析 → 要件定義・DBス
   --req                 要件定義書テンプレートを出力（--out 指定時は .md + .xlsx）
 """
 
+import argparse
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from searchengine.schema_gen.analyzer import analyze
 from searchengine.schema_gen.ingest import load_file, load_sheets
@@ -31,8 +30,18 @@ from searchengine.schema_gen.requirements_doc import (
 )
 
 
-def _get(args: list[str], flag: str, default=None):
-    return args[args.index(flag) + 1] if flag in args else default
+def _build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog="schema-gen", add_help=False)
+    p.add_argument("file", nargs="?")
+    p.add_argument("--sheet")
+    p.add_argument("--sheets")
+    p.add_argument("--credentials")
+    p.add_argument("--table")
+    p.add_argument("--out")
+    p.add_argument("--format", choices=("md", "sql", "both"), default="both")
+    p.add_argument("--er", action="store_true")
+    p.add_argument("--req", action="store_true")
+    return p
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -42,27 +51,28 @@ def main(argv: list[str] | None = None) -> None:
         print(__doc__)
         return
 
-    sheet = _get(args, "--sheet")
-    out_dir = Path(_get(args, "--out")) if _get(args, "--out") else None
-    fmt = _get(args, "--format", "both")
-    sheets_url = _get(args, "--sheets")
-    credentials = _get(args, "--credentials")
-    include_er = "--er" in args
-    include_req = "--req" in args
+    ns = _build_parser().parse_args(args)
+    sheet = ns.sheet
+    out_dir = Path(ns.out) if ns.out else None
+    fmt = ns.format
+    sheets_url = ns.sheets
+    credentials = ns.credentials
+    include_er = ns.er
+    include_req = ns.req
 
     if sheets_url:
         rows, source_id = load_sheets(sheets_url, sheet, credentials)
         stem = source_id[:20]
         filename = f"sheets:{source_id[:12]}…"
     else:
-        if not args or args[0].startswith("--"):
+        if not ns.file:
             print("ERROR: ファイルパスまたは --sheets を指定してください", file=sys.stderr)
             sys.exit(1)
-        filepath = args[0]
+        filepath = ns.file
         rows, filename = load_file(filepath, sheet)
         stem = Path(filepath).stem
 
-    table_name = _get(args, "--table") or stem.replace(" ", "_").replace("-", "_")
+    table_name = ns.table or stem.replace(" ", "_").replace("-", "_")
 
     if not rows:
         print("ERROR: データが空です", file=sys.stderr)
