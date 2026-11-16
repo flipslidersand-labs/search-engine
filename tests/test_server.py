@@ -343,3 +343,46 @@ def test_search_nugget_uses_full_chunk_text(client, tmp_path, monkeypatch):
 def test_ask_top_k_out_of_range_422(client, bad):
     r = client.post("/ask", json={"question": "q", "top_k": bad})
     assert r.status_code == 422
+
+
+# ── SearchEngineError 階層 / exception_handler (#129) ────────────────────────
+
+
+def test_vector_unavailable_error_hierarchy():
+    from searchengine.errors import SearchEngineError, VectorIndexUnavailableError
+    from searchengine.llm import LLMError
+
+    e = VectorIndexUnavailableError("x")
+    assert isinstance(e, RuntimeError)
+    assert isinstance(e, SearchEngineError)
+    assert issubclass(LLMError, SearchEngineError)
+
+
+@pytest.mark.parametrize("mode", ["vector"])
+def test_search_without_vectors_is_400(client, tmp_db, monkeypatch, mode):
+    idx = Index(tmp_db)  # embedder 無し
+    idx.add_document("/x/a.md", "機械学習はデータからパターンを学習する。")
+    idx.close()
+    monkeypatch.setattr(server, "_open_index", lambda *, want_vector=False: Index(tmp_db))
+    r = client.get("/search", params={"q": "機械学習", "mode": mode})
+    assert r.status_code == 400
+    assert "embedder" in r.json()["detail"]
+
+
+def test_handler_maps_llm_error_to_502_and_others_to_500(tmp_db):
+    from searchengine.errors import SearchEngineError
+    from searchengine.llm import LLMError
+
+    @server.app.get("/_t_llm")
+    def _t_llm():
+        raise LLMError("boom")
+
+    @server.app.get("/_t_base")
+    def _t_base():
+        raise SearchEngineError("x")
+
+    c = TestClient(server.app, raise_server_exceptions=False)
+    r = c.get("/_t_llm")
+    assert r.status_code == 502
+    assert r.json() == {"detail": "Ollama エラー"}
+    assert c.get("/_t_base").status_code == 500
