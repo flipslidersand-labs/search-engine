@@ -11,7 +11,7 @@ import httpx
 
 from . import hybrid, query
 from .index import Index
-from .llm import LLMError, LLMResult, Message, OllamaClient
+from .llm import LLMError, describe_error, LLMResult, Message, OllamaClient
 
 _DEFAULT_OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 _DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
@@ -95,7 +95,7 @@ def ask(
             ]
     except httpx.HTTPError as e:
         # RemoteEmbedder 経由のベクトル検索失敗も LLMError に統一する
-        raise LLMError(str(e)) from e
+        raise LLMError(describe_error(e)) from e
 
     if not sources:
         return AskResult(
