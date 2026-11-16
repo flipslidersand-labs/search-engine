@@ -17,6 +17,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from ..security import PathNotAllowedError, validate_index_path
 from .analyzer import ColumnInfo, analyze
 from .ingest import load_file, load_sheets
 from .reporter import report_er, report_sql
@@ -96,16 +97,11 @@ class SearchResponse(BaseModel):
 
 
 def _validate_path(path: str) -> None:
-    """ALLOWED_INDEX_DIRS の範囲外パスを 403 で拒否する（server.py の /index と同じ規約）。"""
-    allowed_raw = os.environ.get("ALLOWED_INDEX_DIRS", "")
-    if not allowed_raw:
-        raise HTTPException(status_code=403, detail="ALLOWED_INDEX_DIRS が未設定です")
-    resolved = Path(path).resolve()
-    for d in allowed_raw.split(":"):
-        d = d.strip()
-        if d and resolved.is_relative_to(Path(d).resolve()):
-            return
-    raise HTTPException(status_code=403, detail=f"許可されていないパス: {path}")
+    """ALLOWED_INDEX_DIRS の範囲外パスを 403 で拒否する（検証本体は security.validate_index_path）。"""
+    try:
+        validate_index_path(path)
+    except PathNotAllowedError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
 def _col_out(c: ColumnInfo) -> ColumnInfoOut:
