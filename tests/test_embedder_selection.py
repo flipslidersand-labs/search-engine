@@ -32,6 +32,16 @@ def _cli_embedder(tmp_path):
 @pytest.mark.parametrize("which", ["server", "cli"])
 def test_embedding_url_selects_fallback_with_remote(monkeypatch, tmp_path, which):
     monkeypatch.setenv("EMBEDDING_URL", "http://example.invalid:1")
+
+    class _FakeRemote:
+        dim = 4
+        backend = "remote:fake"
+
+        def __init__(self, *a, **k):
+            pass
+
+    # dim 取得失敗時はローカルに落ちる (#137) ため、到達可能なリモートを模す
+    monkeypatch.setattr(embedder, "RemoteEmbedder", _FakeRemote)
     emb = _server_embedder() if which == "server" else _cli_embedder(tmp_path)
     assert isinstance(emb, embedder.FallbackEmbedder)
 

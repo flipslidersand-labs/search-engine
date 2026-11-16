@@ -16,7 +16,10 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
+import time
+from collections.abc import Callable
 from typing import Literal, Protocol, runtime_checkable
 
 import numpy as np
@@ -148,18 +151,18 @@ class RemoteEmbedder:
         self.dim: int = self._discover_dim(httpx)
 
     def _discover_dim(self, httpx_mod) -> int:
-        """サービスに trial encode を送って dim を取得する。"""
-        try:
-            resp = httpx_mod.post(
-                f"{self._base_url}/embed",
-                json={"collection": self._collection, "text": "test", "mode": "index"},
-                headers=self._headers,
-                timeout=self._timeout,
-            )
-            resp.raise_for_status()
-            return int(resp.json()["dim"])
-        except Exception:
-            return 768  # e5-base デフォルト
+        """サービスに trial encode を送って dim を取得する。
+
+        失敗時は例外をそのまま送出する（未確定の dim を黙って主張しない, #137）。
+        """
+        resp = httpx_mod.post(
+            f"{self._base_url}/embed",
+            json={"collection": self._collection, "text": "test", "mode": "index"},
+            headers=self._headers,
+            timeout=self._timeout,
+        )
+        resp.raise_for_status()
+        return int(resp.json()["dim"])
 
     @property
     def backend(self) -> str:
@@ -188,9 +191,6 @@ class RemoteEmbedder:
 
     def _request_with_retry(self, url: str, payload: dict, retries: int):
         """指定 URL へ POST し、transient 失敗はリトライする。最終例外は呼び出し側へ送出。"""
-        import logging
-        import time
-
         import httpx  # pylint: disable=import-error
 
         logger = logging.getLogger(__name__)
@@ -261,14 +261,22 @@ class FallbackEmbedder:
     Remote が失敗した場合はローカル Embedder にフォールバックして処理を継続する。
     """
 
-    def __init__(self, remote: RemoteEmbedder, local: Embedder) -> None:
-        import logging
-
+    def __init__(
+        self,
+        remote: RemoteEmbedder,
+        local: Embedder,
+        *,
+        retry_after: float = 60.0,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         self._remote = remote
         self._local = local
         self._using_remote = True
+        self._retry_after = retry_after
+        self._clock = clock
+        self._next_retry_at = 0.0
         self._logger = logging.getLogger(__name__)
-        # dim は remote 優先
+        # dim は現在使っている側。remote 優先
         self.dim = remote.dim
 
     @property
@@ -276,19 +284,43 @@ class FallbackEmbedder:
         active = "remote" if self._using_remote else "local"
         return f"fallback({active}):remote={self._remote.backend},local={self._local.backend}"
 
+    def _fall_back(self, e: Exception) -> None:
+        remote_dim = self._remote.dim
+        self._using_remote = False
+        self.dim = self._local.dim
+        self._next_retry_at = self._clock() + self._retry_after
+        self._logger.warning(
+            "RemoteEmbedder unavailable (%s), falling back to local embedder "
+            "(dim %d -> %d). Vectors produced from now on may have a different "
+            "dimension from existing indexed vectors.",
+            e,
+            remote_dim,
+            self.dim,
+        )
+
     def encode(
         self,
         texts: list[str],
         mode: Literal["index", "search"] = "index",
     ) -> np.ndarray:
+        if not self._using_remote and self._clock() >= self._next_retry_at:
+            try:
+                result = self._remote.encode(texts, mode)
+            except Exception as e:
+                self._next_retry_at = self._clock() + self._retry_after
+                self._logger.warning("RemoteEmbedder retry failed (%s), staying on local", e)
+            else:
+                self._using_remote = True
+                self.dim = self._remote.dim
+                self._logger.info(
+                    "RemoteEmbedder recovered, switching back to remote (dim=%d)", self.dim
+                )
+                return result
         if self._using_remote:
             try:
                 return self._remote.encode(texts, mode)
             except Exception as e:
-                self._logger.warning(
-                    "RemoteEmbedder unavailable (%s), falling back to local embedder", e
-                )
-                self._using_remote = False
+                self._fall_back(e)
         return self._local.encode(texts, mode)
 
 
@@ -303,11 +335,17 @@ def create_embedder() -> FallbackEmbedder | Embedder:
     """
     url = os.environ.get("EMBEDDING_URL", "").strip()
     if url:
-        remote = RemoteEmbedder(
-            base_url=url,
-            collection=os.environ.get("EMBEDDING_COLLECTION", _DEFAULT_COLLECTION),
-            api_key=os.environ.get("EMBEDDING_API_KEY"),
-        )
         local = Embedder()
+        try:
+            remote = RemoteEmbedder(
+                base_url=url,
+                collection=os.environ.get("EMBEDDING_COLLECTION", _DEFAULT_COLLECTION),
+                api_key=os.environ.get("EMBEDDING_API_KEY"),
+            )
+        except Exception as e:
+            logging.getLogger(__name__).warning(
+                "RemoteEmbedder init failed (%s), using local embedder (dim=%d)", e, local.dim
+            )
+            return local
         return FallbackEmbedder(remote, local)
     return Embedder()
