@@ -18,7 +18,13 @@ _TIMEOUT = 120.0
 
 
 class LLMError(Exception):
-    """LLM バックエンド呼び出しの失敗(HTTP 層の例外を包む)。"""
+    """LLM バックエンド呼び出しの失敗(HTTP 層・レスポンス不正を包む)。"""
+
+
+def describe_error(e: BaseException) -> str:
+    """str(e) が空でも原因が分かるよう型名を補う。"""
+    msg = str(e)
+    return f"{type(e).__name__}: {msg}" if msg else type(e).__name__
 
 
 @dataclass
@@ -61,8 +67,10 @@ class OllamaClient:
             )
             resp.raise_for_status()
         except httpx.HTTPError as e:
-            raise LLMError(str(e)) from e
+            raise LLMError(describe_error(e)) from e
         latency_ms = int((time.monotonic() - t0) * 1000)
-        data = resp.json()
-        content: str = data["message"]["content"]
+        try:
+            content: str = resp.json()["message"]["content"]
+        except (ValueError, KeyError, TypeError) as e:
+            raise LLMError(f"不正なレスポンス: {describe_error(e)}") from e
         return LLMResult(content=content, model=self.model, latency_ms=latency_ms)

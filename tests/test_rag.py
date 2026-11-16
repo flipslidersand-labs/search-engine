@@ -104,6 +104,44 @@ def test_ollama_client_http_status_error():
             OllamaClient().chat([Message(role="user", content="t")])
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        "not json",
+        '{"nomessage": 1}',
+        '{"message": {}}',
+        '{"message": null}',
+        "[1]",
+    ],
+)
+def test_ollama_client_bad_response_is_llmerror(body):
+    mock = MagicMock()
+    mock.raise_for_status.return_value = None
+    mock.json.side_effect = lambda: __import__("json").loads(body)
+    with patch("httpx.post", return_value=mock):
+        with pytest.raises(LLMError):
+            OllamaClient().chat([Message(role="user", content="t")])
+
+
+def test_ollama_client_empty_message_includes_type_name():
+    import httpx as httpx_module
+
+    with patch("httpx.post", side_effect=httpx_module.ReadTimeout("")):
+        with pytest.raises(LLMError) as ei:
+            OllamaClient().chat([Message(role="user", content="t")])
+    assert "ReadTimeout" in str(ei.value)
+
+
+def test_ask_endpoint_bad_response_is_502(indexed_client):
+    mock = MagicMock()
+    mock.raise_for_status.return_value = None
+    mock.json.return_value = {"unexpected": 1}
+    with patch("httpx.post", return_value=mock):
+        r = indexed_client.post("/ask", json={"question": "RRF", "mode": "keyword"})
+    assert r.status_code == 502
+    assert r.json()["detail"] == "Ollama エラー"
+
+
 # ── ask() 単体テスト ──────────────────────────────────────────────────────────
 
 
@@ -176,7 +214,7 @@ def test_ask_endpoint_ollama_error(indexed_client):
             json={"question": "RRF", "mode": "keyword"},
         )
 
-    assert r.status_code == 500
+    assert r.status_code == 502
     assert r.json()["detail"] == "Ollama エラー"
     assert "Ollama 未起動" not in r.text
 
@@ -263,7 +301,7 @@ def test_clamp_top_k():
 
 @pytest.mark.parametrize("mode", ["vector", "hybrid"])
 def test_ask_endpoint_embedder_http_error(indexed_client, mode):
-    """RemoteEmbedder 相当の httpx エラーも「Ollama エラー」の 500 になる。"""
+    """RemoteEmbedder 相当の httpx エラーも「Ollama エラー」の 502 になる。"""
     import httpx as httpx_module
 
     def _open(**_kw):
@@ -277,6 +315,6 @@ def test_ask_endpoint_embedder_http_error(indexed_client, mode):
     ):
         r = indexed_client.post("/ask", json={"question": "RRF", "mode": mode})
 
-    assert r.status_code == 500
+    assert r.status_code == 502
     assert r.json()["detail"] == "Ollama エラー"
     assert "埋め込み失敗" not in r.text
