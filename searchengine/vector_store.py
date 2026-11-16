@@ -144,7 +144,7 @@ class SqliteVectorStore:
 # distance:    Cosine（正規化済みベクトルの内積と等価）
 # payload:     { source: str, chunk_id: str, text: str, doc_type: str }
 QDRANT_COLLECTION = "search-engine-docs"
-QDRANT_VECTOR_SIZE = int(os.environ.get("QDRANT_VECTOR_SIZE", "768"))
+QDRANT_DEFAULT_VECTOR_SIZE = 768  # 明示指定も環境変数も無い場合のみ使う
 QDRANT_DISTANCE = "Cosine"
 
 
@@ -155,7 +155,7 @@ class QdrantVectorStore:
         self,
         url: str,
         collection: str = QDRANT_COLLECTION,
-        vector_size: int = QDRANT_VECTOR_SIZE,
+        vector_size: int | None = None,
     ) -> None:
         if not _HAS_QDRANT:
             raise ImportError(
@@ -163,6 +163,9 @@ class QdrantVectorStore:
             )
         self._client = QdrantClient(url=url)
         self._collection = collection
+        # 優先順位: 明示引数 (embedder.dim) > 環境変数 (生成時評価) > 既定値
+        if vector_size is None:
+            vector_size = int(os.environ.get("QDRANT_VECTOR_SIZE", str(QDRANT_DEFAULT_VECTOR_SIZE)))
         self._vector_size = vector_size
         self._ensure_collection()
 
@@ -175,6 +178,15 @@ class QdrantVectorStore:
                     size=self._vector_size,
                     distance=Distance.COSINE,
                 ),
+            )
+            return
+        vectors = self._client.get_collection(self._collection).config.params.vectors
+        actual = getattr(vectors, "size", None)  # 名前付きベクトル構成は対象外
+        if isinstance(actual, int) and actual != self._vector_size:
+            raise ValueError(
+                f"Qdrant コレクション '{self._collection}' の次元 ({actual}) が "
+                f"Embedder の次元 ({self._vector_size}) と一致しません。"
+                "コレクションを作り直すか、Embedder / QDRANT_VECTOR_SIZE を揃えてください。"
             )
 
     def upsert(self, doc_id: str, chunk_index: int, vec: np.ndarray) -> None:
@@ -244,14 +256,17 @@ def _point_id(doc_id: str, chunk_index: int) -> str:
 # ── ファクトリ ────────────────────────────────────────────────────────────────
 
 
-def create_vector_store(conn: sqlite3.Connection) -> SqliteVectorStore | QdrantVectorStore:
-    """QDRANT_URL 環境変数の有無でバックエンドを自動選択する。"""
-    import os
+def create_vector_store(
+    conn: sqlite3.Connection, dim: int | None = None
+) -> SqliteVectorStore | QdrantVectorStore:
+    """QDRANT_URL 環境変数の有無でバックエンドを自動選択する。
 
+    dim は embedder.dim。Qdrant 使用時のコレクション次元として優先される。
+    """
     qdrant_url = os.environ.get("QDRANT_URL")
     if qdrant_url:
         collection = os.environ.get("QDRANT_COLLECTION", QDRANT_COLLECTION)
-        return QdrantVectorStore(url=qdrant_url, collection=collection)
+        return QdrantVectorStore(url=qdrant_url, collection=collection, vector_size=dim)
     return SqliteVectorStore(conn)
 
 

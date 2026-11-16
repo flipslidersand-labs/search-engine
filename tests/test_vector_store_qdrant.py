@@ -197,3 +197,51 @@ def test_upsert_point_id_stable_across_calls_and_distinct(qdrant_store):
     assert _upsert_ids(qdrant_store, "doc1", 0) == first
     assert _upsert_ids(qdrant_store, "doc1", 1) != first
     assert _upsert_ids(qdrant_store, "doc2", 0) != first
+
+
+# ── 次元の扱い (#175) ────────────────────────────────────────────────────────
+
+
+def _existing_size(client_mock, size: int) -> None:
+    client_mock.get_collection.return_value.config.params.vectors.size = size
+
+
+def test_existing_collection_dim_mismatch_raises():
+    client_mock = _make_client_mock(existing_collections=["search-engine-docs"])
+    _existing_size(client_mock, 768)
+    with _qdrant_patches(client_mock), pytest.raises(ValueError, match="768.*384"):
+        QdrantVectorStore(url="http://localhost:6333", vector_size=384)
+
+
+def test_existing_collection_dim_match_ok():
+    client_mock = _make_client_mock(existing_collections=["search-engine-docs"])
+    _existing_size(client_mock, 384)
+    with _qdrant_patches(client_mock):
+        QdrantVectorStore(url="http://localhost:6333", vector_size=384)
+    client_mock.create_collection.assert_not_called()
+
+
+def test_env_vector_size_evaluated_at_construction(monkeypatch):
+    client_mock = _make_client_mock()
+    monkeypatch.setenv("QDRANT_VECTOR_SIZE", "512")
+    with _qdrant_patches(client_mock):
+        store = QdrantVectorStore(url="http://localhost:6333")
+    assert store._vector_size == 512
+
+
+def test_explicit_vector_size_beats_env(monkeypatch):
+    client_mock = _make_client_mock()
+    monkeypatch.setenv("QDRANT_VECTOR_SIZE", "512")
+    with _qdrant_patches(client_mock):
+        store = QdrantVectorStore(url="http://localhost:6333", vector_size=384)
+    assert store._vector_size == 384
+
+
+def test_factory_passes_embedder_dim(monkeypatch):
+    monkeypatch.setenv("QDRANT_URL", "http://localhost:6333")
+    client_mock = _make_client_mock()
+    conn = sqlite3.connect(":memory:")
+    with _qdrant_patches(client_mock):
+        store = create_vector_store(conn, dim=384)
+    assert store._vector_size == 384
+    conn.close()
