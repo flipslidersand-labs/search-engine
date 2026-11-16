@@ -449,6 +449,36 @@ def test_fallback_stays_local_if_retry_fails_and_defers_next_retry():
     assert remote.encode.call_count == 3
 
 
+def test_fallback_concurrent_encode_during_retry_does_not_call_remote():
+    fb, remote, _, now = _fb_with_clock()
+    remote.encode.side_effect = RuntimeError("down")
+    fb.encode(["x"])
+    now["t"] += 60
+    inner = {}
+
+    def slow_remote(texts, mode="index"):
+        inner["out"] = fb.encode(["other"])  # 再試行中の別呼び出し
+        raise RuntimeError("still down")
+
+    remote.encode.side_effect = slow_remote
+    fb.encode(["y"])
+    assert remote.encode.call_count == 2  # 初回失敗 + 再試行1回のみ
+    assert inner["out"].shape[0] == 1
+
+
+def test_fallback_empty_encode_does_not_trigger_recovery():
+    fb, remote, local, now = _fb_with_clock()
+    remote.encode.side_effect = RuntimeError("down")
+    fb.encode(["x"])
+    now["t"] += 120
+    remote.encode.side_effect = None
+    out = fb.encode([])
+    assert out.shape[0] == 0
+    assert remote.encode.call_count == 1
+    assert fb.dim == local.dim
+    assert "fallback(local)" in fb.backend
+
+
 def test_discover_dim_failure_propagates():
     import httpx
 

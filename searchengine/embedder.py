@@ -303,11 +303,15 @@ class FallbackEmbedder:
         texts: list[str],
         mode: Literal["index", "search"] = "index",
     ) -> np.ndarray:
+        if not texts:
+            # 空入力は通信しないため、復旧判定・状態変更をしない
+            return np.zeros((0, self.dim), dtype=np.float32)
         if not self._using_remote and self._clock() >= self._next_retry_at:
+            # 試行前に次回時刻を進め、並行する encode が同時にリモートへ向かうのを防ぐ
+            self._next_retry_at = self._clock() + self._retry_after
             try:
                 result = self._remote.encode(texts, mode)
             except Exception as e:
-                self._next_retry_at = self._clock() + self._retry_after
                 self._logger.warning("RemoteEmbedder retry failed (%s), staying on local", e)
             else:
                 self._using_remote = True
