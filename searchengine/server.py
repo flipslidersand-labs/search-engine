@@ -21,19 +21,20 @@ import secrets
 from pathlib import Path
 from typing import Literal
 
-import httpx
 from fastapi import (  # pylint: disable=import-error
     Depends,
     FastAPI,
     HTTPException,
     Query,
+    Request,
 )
-from fastapi.responses import HTMLResponse  # pylint: disable=import-error
+from fastapi.responses import HTMLResponse, JSONResponse  # pylint: disable=import-error
 from fastapi.security.api_key import APIKeyHeader  # pylint: disable=import-error
 from pydantic import BaseModel, Field  # pylint: disable=import-error
 
 from . import hybrid, ingest, query, rag, tokenizer
 from .config import open_index
+from .errors import SearchEngineError, VectorIndexUnavailableError
 from .index import Index
 from .llm import LLMError
 from .metrics import (
@@ -94,6 +95,20 @@ app = FastAPI(
     version="0.4.0",
 )
 app.include_router(schema_router, dependencies=[Depends(require_api_key)])
+
+
+@app.exception_handler(SearchEngineError)
+def _search_engine_error_handler(request: Request, exc: SearchEngineError) -> JSONResponse:
+    """SearchEngineError 階層を HTTP ステータスへ集約変換する (#129)。"""
+    if isinstance(exc, LLMError):
+        # 上流(Ollama)障害は 502 Bad Gateway
+        logger.error("Ollama エラー", exc_info=exc)
+        return JSONResponse(status_code=502, content={"detail": "Ollama エラー"})
+    if isinstance(exc, VectorIndexUnavailableError):
+        # クライアントが vector モードを要求したが索引にベクトルが無い
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+    logger.error("SearchEngineError", exc_info=exc)
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
 
 @app.on_event("startup")
@@ -336,10 +351,6 @@ def ask(req: AskRequest) -> AskResponse:
                 ollama_url=req.ollama_url or os.environ.get("OLLAMA_URL", "http://localhost:11434"),
                 model=req.model,
             )
-        except (LLMError, httpx.HTTPError):
-            logger.exception("Ollama エラー")
-            # 上流(Ollama)障害は 502 Bad Gateway (#129)
-            raise HTTPException(status_code=502, detail="Ollama エラー")
         finally:
             if idx is not None:
                 idx.close()

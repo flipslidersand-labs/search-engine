@@ -12,12 +12,14 @@ from dataclasses import dataclass
 
 import httpx
 
+from .errors import SearchEngineError
+
 _DEFAULT_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 _DEFAULT_MODEL = "qwen2.5:7b"
 _TIMEOUT = 120.0
 
 
-class LLMError(Exception):
+class LLMError(SearchEngineError):
     """LLM バックエンド呼び出しの失敗(HTTP 層・レスポンス不正を包む)。"""
 
 
