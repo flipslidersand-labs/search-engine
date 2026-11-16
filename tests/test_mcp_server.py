@@ -230,3 +230,29 @@ def test_index_skips_symlink_pointing_outside_allowed(tmp_path: Path, tmp_db: st
     monkeypatch.setenv("ALLOWED_INDEX_DIRS", str(allowed))
     result = call_tool("index", {"path": str(allowed)})
     assert result["indexed"] == 1
+
+
+def test_tool_runs_off_event_loop_thread(tmp_db: str, monkeypatch: pytest.MonkeyPatch):
+    """#126: 同期処理はイベントループ上ではなくワーカースレッドで実行される。"""
+    import threading
+
+    seen: dict[str, int] = {}
+    real_open = mcp_server._open_index
+
+    def spy(*args, **kwargs):
+        seen["worker"] = threading.get_ident()
+        return real_open(*args, **kwargs)
+
+    monkeypatch.setattr(mcp_server, "_open_index", spy)
+
+    async def run() -> int:
+        server = create_server()
+        handler = server.get_request_handler("tools/call")
+        params = types.CallToolRequestParams(name="stats", arguments={})
+        result = await handler.handler(None, params)
+        assert not result.is_error
+        return threading.get_ident()
+
+    loop_thread = asyncio.run(run())
+    assert "worker" in seen
+    assert seen["worker"] != loop_thread
