@@ -391,6 +391,113 @@ def test_fallback_stays_local_after_switching():
     assert call_count["local"] == 1
 
 
+def _fb_with_clock(remote_dim=768, retry_after=60.0):
+    remote = MagicMock()
+    remote.dim = remote_dim
+    remote.backend = "remote:x"
+    local = Embedder()
+    now = {"t": 1000.0}
+    fb = FallbackEmbedder(remote, local, retry_after=retry_after, clock=lambda: now["t"])
+    return fb, remote, local, now
+
+
+def test_fallback_dim_becomes_local_on_switch():
+    fb, remote, local, _ = _fb_with_clock()
+    assert fb.dim == 768
+    remote.encode.side_effect = RuntimeError("down")
+    fb.encode(["x"])
+    assert fb.dim == local.dim != 768
+
+
+def test_fallback_does_not_call_remote_before_retry_after():
+    fb, remote, _, now = _fb_with_clock()
+    remote.encode.side_effect = RuntimeError("down")
+    fb.encode(["x"])
+    assert remote.encode.call_count == 1
+    now["t"] += 59
+    fb.encode(["y"])
+    assert remote.encode.call_count == 1
+
+
+def test_fallback_recovers_to_remote_after_retry_after():
+    fb, remote, _, now = _fb_with_clock()
+    remote.encode.side_effect = RuntimeError("down")
+    fb.encode(["x"])
+    now["t"] += 60
+    remote.encode.side_effect = None
+    remote.encode.return_value = np.zeros((1, 768), dtype=np.float32)
+    out = fb.encode(["y"])
+    assert out.shape == (1, 768)
+    assert fb.dim == 768
+    assert "fallback(remote)" in fb.backend
+
+
+def test_fallback_stays_local_if_retry_fails_and_defers_next_retry():
+    fb, remote, local, now = _fb_with_clock()
+    remote.encode.side_effect = RuntimeError("down")
+    fb.encode(["x"])
+    now["t"] += 60
+    out = fb.encode(["y"])
+    assert remote.encode.call_count == 2
+    assert out.shape == (1, local.dim)
+    assert fb.dim == local.dim
+    now["t"] += 30  # 前回再試行から 30 秒 → まだ再試行しない
+    fb.encode(["z"])
+    assert remote.encode.call_count == 2
+    now["t"] += 30
+    fb.encode(["w"])
+    assert remote.encode.call_count == 3
+
+
+def test_fallback_concurrent_encode_during_retry_does_not_call_remote():
+    fb, remote, _, now = _fb_with_clock()
+    remote.encode.side_effect = RuntimeError("down")
+    fb.encode(["x"])
+    now["t"] += 60
+    inner = {}
+
+    def slow_remote(texts, mode="index"):
+        inner["out"] = fb.encode(["other"])  # 再試行中の別呼び出し
+        raise RuntimeError("still down")
+
+    remote.encode.side_effect = slow_remote
+    fb.encode(["y"])
+    assert remote.encode.call_count == 2  # 初回失敗 + 再試行1回のみ
+    assert inner["out"].shape[0] == 1
+
+
+def test_fallback_empty_encode_does_not_trigger_recovery():
+    fb, remote, local, now = _fb_with_clock()
+    remote.encode.side_effect = RuntimeError("down")
+    fb.encode(["x"])
+    now["t"] += 120
+    remote.encode.side_effect = None
+    out = fb.encode([])
+    assert out.shape[0] == 0
+    assert remote.encode.call_count == 1
+    assert fb.dim == local.dim
+    assert "fallback(local)" in fb.backend
+
+
+def test_discover_dim_failure_propagates():
+    import httpx
+
+    with patch("httpx.post", side_effect=httpx.ConnectError("down")):
+        with pytest.raises(httpx.ConnectError):
+            RemoteEmbedder(_TEST_URL)
+
+
+def test_create_embedder_falls_back_to_local_when_remote_init_fails():
+    import httpx
+
+    with (
+        patch("httpx.post", side_effect=httpx.ConnectError("down")),
+        patch.dict(os.environ, {"EMBEDDING_URL": _TEST_URL}),
+    ):
+        e = create_embedder()
+    assert isinstance(e, Embedder)
+
+
 def test_fallback_local_chain_feature_hash():
     """LocalST 未インストール時は FeatureHash を使う（Embedder の内部フォールバック）。"""
     e = Embedder()
