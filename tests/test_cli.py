@@ -220,14 +220,28 @@ def test_db_option_after_subcommand(capsys, docs, tmp_path):
     assert not (tmp_path / "search.db").exists()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="既知: サブパーサの default=search.db が親パーサの --db を上書きし、"
-    "サブコマンド前置の --db が無視される (server 側のみ #169 で修正済み)",
-)
 def test_db_option_before_subcommand(capsys, docs, tmp_path):
     db = tmp_path / "before.db"
     _db_position_roundtrip(capsys, docs, str(db), "before")
+    assert db.exists()
+    assert not (tmp_path / "search.db").exists()
+
+
+def test_db_option_both_positions_after_wins(capsys, docs, tmp_path):
+    before, after = tmp_path / "before.db", tmp_path / "after.db"
+    assert cli.main(["--db", str(before), "index", str(docs), "--db", str(after)]) == 0
+    capsys.readouterr()
+    assert after.exists()
+    assert not before.exists()
+    assert not (tmp_path / "search.db").exists()
+
+
+@pytest.mark.parametrize("sub", [["index", "DOCS"], ["search", "機械学習"], ["stats"]])
+def test_db_prefix_applies_to_every_subcommand(capsys, docs, tmp_path, sub):
+    db = tmp_path / "pre.db"
+    argv = [str(docs) if a == "DOCS" else a for a in sub]
+    assert cli.main(["--db", str(db), *argv]) == 0
+    capsys.readouterr()
     assert db.exists()
     assert not (tmp_path / "search.db").exists()
 
