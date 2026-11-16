@@ -80,11 +80,13 @@ def cmd_stats(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    # --db はグローバル/サブコマンド両方の位置で受けられるよう親パーサに置く
+    # --db はグローバル/サブコマンド両方の位置で受ける。サブ側は default を SUPPRESS にし、
+    # 前置の値を上書きしない(両方指定時は後置が勝つ)。既定値は親パーサだけが持つ。
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--db", default="search.db", help="SQLite DB path")
+    common.add_argument("--db", default=argparse.SUPPRESS, help="SQLite DB path")
 
-    p = argparse.ArgumentParser(prog="searchengine", parents=[common])
+    p = argparse.ArgumentParser(prog="searchengine")
+    p.add_argument("--db", default="search.db", help="SQLite DB path")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     pi = sub.add_parser("index", parents=[common], help="ファイル/ディレクトリをインデックス")
