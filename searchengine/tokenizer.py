@@ -60,14 +60,13 @@ def _mecab_tokens(text: str) -> list[str]:
     return words + bigrams
 
 
-def tokenize(text: str, *, drop_stopwords: bool = True) -> list[str]:
+def tokenize(text: str) -> list[str]:
     """テキストをトークン列に変換。順序保持の重複排除あり。"""
     text = normalize(text)
     if not text:
         return []
     raw = _mecab_tokens(text) if _HAS_FUGASHI else _fallback_tokens(text)
-    if drop_stopwords:
-        raw = [t for t in raw if t not in _STOPWORDS]
+    raw = [t for t in raw if t not in _STOPWORDS]
     return list(dict.fromkeys(raw))  # 順序保持 dedup
 
 
