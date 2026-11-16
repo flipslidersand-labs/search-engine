@@ -21,7 +21,6 @@ import secrets
 from pathlib import Path
 from typing import Literal
 
-import httpx
 from fastapi import (  # pylint: disable=import-error
     Depends,
     FastAPI,
@@ -352,10 +351,6 @@ def ask(req: AskRequest) -> AskResponse:
                 ollama_url=req.ollama_url or os.environ.get("OLLAMA_URL", "http://localhost:11434"),
                 model=req.model,
             )
-        except httpx.HTTPError:
-            logger.exception("Ollama エラー")
-            # 上流(Ollama)障害は 502 Bad Gateway (#129)
-            raise HTTPException(status_code=502, detail="Ollama エラー")
         finally:
             if idx is not None:
                 idx.close()
