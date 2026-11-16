@@ -4,8 +4,7 @@
 段落・見出し境界を優先し、無ければトークン数で分割。
 オーバーラップを設けて境界での文脈断絶を防ぐ。
 
-注: トークン長は簡易に「空白区切り語数」で近似する（Phase 1 MVP）。
-本番では tokenizer の出力長やモデルの tokenizer に合わせる。
+注: トークン長は estimate_tokens（CJK 1/字・英数語 2/語・記号 1/字）で近似する。
 """
 
 from __future__ import annotations
@@ -91,44 +90,67 @@ def split_to_token_budget(chunks: list[Chunk], budget: int = EMBED_TOKEN_BUDGET)
 
 
 def _split_paragraphs(text: str) -> list[str]:
-    parts = [p.strip() for p in text.split("\n\n")]
-    return [p for p in parts if p]
+    # 行頭インデントを保つため strip() ではなく前後の改行のみ除く
+    parts = [p.strip("\n") for p in text.split("\n\n")]
+    return [p for p in parts if p.strip()]
+
+
+def _window_split(para: str, size: int, overlap: int) -> list[str]:
+    """段落を推定 tokens の窓でスライド分割する。元テキストを切り出すので改行・インデントは保持される。"""
+    toks = [(m.start(), m.end(), 2 if m.lastgroup == "word" else 1) for m in _TOKEN.finditer(para)]
+    out: list[str] = []
+    i = 0
+    while i < len(toks):
+        j, used = i, 0
+        while j < len(toks) and (j == i or used + toks[j][2] <= size):
+            used += toks[j][2]
+            j += 1
+        out.append(para[toks[i][0] : toks[j - 1][1]])
+        if j >= len(toks):
+            break
+        # 末尾から overlap 分を次窓の先頭に戻す(必ず前進する)
+        k, back = j, 0
+        while k > i + 1 and back + toks[k - 1][2] <= overlap:
+            back += toks[k - 1][2]
+            k -= 1
+        i = k
+    return out
 
 
 def chunk_text(text: str, size: int = DEFAULT_SIZE, overlap: int = DEFAULT_OVERLAP) -> list[Chunk]:
-    """段落優先 + トークン数フォールバックで分割。"""
+    """段落優先 + トークン数フォールバックで分割。
+
+    size / overlap は estimate_tokens の推定 tokens 単位。段落内の改行・インデントは保持し、
+    段落同士は空行で連結する。
+    """
     if overlap >= size:
         raise ValueError("overlap must be smaller than size")
 
     chunks: list[Chunk] = []
     buf: list[str] = []
+    buf_tokens = 0
 
     def flush() -> None:
         if buf:
-            chunks.append(Chunk(index=len(chunks), text=" ".join(buf)))
+            chunks.append(Chunk(index=len(chunks), text="\n\n".join(buf)))
 
     for para in _split_paragraphs(text) or [text]:
-        words = para.split()
-        if not words:
+        if not para.strip():
             continue
+        n = estimate_tokens(para)
         # 段落がチャンクサイズに収まるならそのまま積む
-        if len(buf) + len(words) <= size:
-            buf.extend(words)
+        if buf_tokens + n <= size:
+            buf.append(para)
+            buf_tokens += n
             continue
         # バッファを確定し、長い段落はトークン窓でスライド分割
         flush()
-        buf = []
-        if len(words) <= size:
-            buf = words
+        buf, buf_tokens = [], 0
+        if n <= size:
+            buf, buf_tokens = [para], n
             continue
-        step = size - overlap
-        for start in range(0, len(words), step):
-            window = words[start : start + size]
-            if not window:
-                break
-            chunks.append(Chunk(index=len(chunks), text=" ".join(window)))
-            if start + size >= len(words):
-                break
+        for piece in _window_split(para, size, overlap):
+            chunks.append(Chunk(index=len(chunks), text=piece))
     flush()
 
     # 全体が空ならフォールバックで1チャンク

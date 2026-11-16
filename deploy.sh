@@ -27,6 +27,7 @@ rsync -az --delete \
   --exclude='__pycache__/' \
   --exclude='*.pyc' \
   --exclude='*.db' \
+  --exclude='.env' \
   --exclude='.pytest_cache/' \
   . "${REMOTE_USER}@${HOST}:${REMOTE_DIR}/"
 
