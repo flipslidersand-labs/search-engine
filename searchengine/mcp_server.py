@@ -27,6 +27,7 @@ from mcp import types
 from mcp.server import Server
 
 from . import hybrid, ingest
+from .config import open_index
 from .index import Index
 from .query import parse as parse_query
 from .rag import ask as rag_ask
@@ -49,11 +50,7 @@ def _make_text(text: str) -> list[types.TextContent]:
 
 
 def _open_index(*, want_vector: bool = False) -> Index:
-    from .embedder import create_embedder
-
-    db_path = _DB_PATH
-    embedder = create_embedder() if want_vector else None
-    return Index(db_path, embedder=embedder)
+    return open_index(_DB_PATH, want_vector)
 
 
 TOOLS = [
