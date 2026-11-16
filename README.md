@@ -138,7 +138,7 @@ No auth required. Returns `search_requests_total`, `search_latency_seconds`, etc
 | `EMBEDDING_URL` | (unset = local fallback) | RemoteEmbedder endpoint |
 | `QDRANT_URL` | (unset = SQLite) | Qdrant server URL |
 | `QDRANT_COLLECTION` | `search-engine-docs` | Qdrant collection |
-| `QDRANT_VECTOR_SIZE` | `768` | Qdrant vector size |
+| `QDRANT_VECTOR_SIZE` | `768` | Qdrant vector size; precedence: explicit argument (`embedder.dim`) > this variable > 768 / Qdrant ベクトル次元。優先順位: 引数（`embedder.dim`）> 本変数 > 768 |
 | `EMBEDDING_COLLECTION` | `search-engine` | RemoteEmbedder collection |
 | `EMBEDDING_API_KEY` | (unset) | RemoteEmbedder API key |
 | `SCHEMA_DB` | `schemas.db` | schema_gen DB path / schema_gen DB パス |
@@ -151,6 +151,8 @@ No auth required. Returns `search_requests_total`, `search_latency_seconds`, etc
 ---
 
 ## MCP Server / MCP サーバー（Claude Code 連携）
+
+Setup details: [docs/mcp-setup.md](docs/mcp-setup.md) / 設定の詳細は [docs/mcp-setup.md](docs/mcp-setup.md) を参照。
 
 ```json
 {
