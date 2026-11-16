@@ -334,8 +334,9 @@ def ask(req: AskRequest) -> AskResponse:
                 ollama_url=req.ollama_url or os.environ.get("OLLAMA_URL", "http://localhost:11434"),
                 model=req.model,
             )
-        except LLMError as e:
-            raise HTTPException(status_code=500, detail=f"Ollama エラー: {e}")
+        except LLMError:
+            logger.exception("Ollama エラー")
+            raise HTTPException(status_code=500, detail="Ollama エラー")
         finally:
             idx.close()
 

@@ -177,7 +177,8 @@ def test_ask_endpoint_ollama_error(indexed_client):
         )
 
     assert r.status_code == 500
-    assert r.json()["detail"] == "Ollama エラー: Ollama 未起動"
+    assert r.json()["detail"] == "Ollama エラー"
+    assert "Ollama 未起動" not in r.text
 
 
 def test_ask_endpoint_empty_question(client):
@@ -277,4 +278,5 @@ def test_ask_endpoint_embedder_http_error(indexed_client, mode):
         r = indexed_client.post("/ask", json={"question": "RRF", "mode": mode})
 
     assert r.status_code == 500
-    assert r.json()["detail"] == "Ollama エラー: 埋め込み失敗"
+    assert r.json()["detail"] == "Ollama エラー"
+    assert "埋め込み失敗" not in r.text

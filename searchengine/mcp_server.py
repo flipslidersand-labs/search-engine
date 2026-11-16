@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import logging
 import asyncio
 import json
 import os
@@ -30,7 +31,9 @@ from .config import open_index
 from .index import Index
 from .query import parse as parse_query
 from .rag import ask as rag_ask
-from .security import allowed_index_dirs, validate_index_path
+from .security import PathNotAllowedError, allowed_index_dirs, validate_index_path
+
+logger = logging.getLogger(__name__)
 
 _DB_PATH = os.environ.get("SEARCH_DB", "search.db")
 _OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
@@ -246,9 +249,17 @@ def create_server() -> Server:
 
             return types.CallToolResult(content=_make_text(json.dumps(result, ensure_ascii=False)))
 
-        except Exception as exc:  # pylint: disable=broad-except
+        except (ValueError, PathNotAllowedError) as exc:
+            # 入力検証エラーは利用者向け文言なのでそのまま返す
+            logger.warning("tool 入力エラー: %s: %s", name, exc)
             return types.CallToolResult(
                 content=_make_text(json.dumps({"error": str(exc), "tool": name})),
+                is_error=True,
+            )
+        except Exception:  # pylint: disable=broad-except
+            logger.exception("tool 実行失敗: %s", name)
+            return types.CallToolResult(
+                content=_make_text(json.dumps({"error": "internal error", "tool": name})),
                 is_error=True,
             )
 

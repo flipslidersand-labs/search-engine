@@ -116,7 +116,7 @@ class TestReporters:
     def test_sql_create_table(self):
         cols = self._cols()
         sql = report_sql("customers", cols)
-        assert "CREATE TABLE customers" in sql
+        assert 'CREATE TABLE "customers"' in sql
         assert "customer_id" in sql
         assert "PRIMARY KEY" in sql
 
