@@ -61,6 +61,16 @@ class Index:
         # embedder を渡すとベクトル索引も同 DB に構築（設計書 §2.6）
         self.embedder = embedder
         self.vectors = VectorStore(self.conn) if embedder is not None else None
+        # embedder 無しでも既存の vectors テーブルがあれば、再索引・削除時に古い行を
+        # 掃除する (#168)。テーブルが無ければ作らない。
+        self._vector_cleaner = self.vectors
+        if (
+            self._vector_cleaner is None
+            and self.conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vectors'"
+            ).fetchone()
+        ):
+            self._vector_cleaner = VectorStore(self.conn)
         # Contextual Retrieval (#78): 有効時は検索用テキスト（FTS content・
         # 埋め込みベクトル）にのみ位置づけ説明を前置する。スニペット表示用の
         # "original" は常に元のチャンクテキストのまま保持する。
@@ -82,7 +92,7 @@ class Index:
         doc_id = _doc_id(path)
         h = _hash(text)
         row = self.conn.execute("SELECT hash FROM documents WHERE doc_id = ?", (doc_id,)).fetchone()
-        if row and row[0] == h:
+        if row and row[0] == h and not self._vectors_missing(doc_id):
             return doc_id  # 変更なし → スキップ
         try:
             self._replace_document(doc_id, path, text, doc_type, mtime, h)
@@ -93,13 +103,26 @@ class Index:
             raise
         return doc_id
 
+    def _vectors_missing(self, doc_id: str) -> bool:
+        """embedder 付きなのに、チャンクがあるのに当該 doc のベクトルが0件なら True。"""
+        if self.vectors is None:
+            return False
+        has_chunks = self.conn.execute(
+            "SELECT 1 FROM chunks_fts WHERE doc_id = ? LIMIT 1", (doc_id,)
+        ).fetchone()
+        if not has_chunks:
+            return False
+        return not self.conn.execute(
+            "SELECT 1 FROM vectors WHERE doc_id = ? LIMIT 1", (doc_id,)
+        ).fetchone()
+
     def _replace_document(
         self, doc_id: str, path: str, text: str, doc_type: str, mtime: float | None, h: str
     ) -> None:
         # 旧チャンクを削除してから再投入（更新 = DELETE→INSERT）
         self.conn.execute("DELETE FROM chunks_fts WHERE doc_id = ?", (doc_id,))
-        if self.vectors is not None:
-            self.vectors.delete_doc(doc_id)
+        if self._vector_cleaner is not None:
+            self._vector_cleaner.delete_doc(doc_id)
         chunks = chunker.chunk_text(text)
         if self.embedder is not None:
             # ベクトル索引時のみ: prefix 込みで e5 の512 tokens上限に収める (#95)。
@@ -133,8 +156,8 @@ class Index:
         doc_id = _doc_id(path)
         self.conn.execute("DELETE FROM chunks_fts WHERE doc_id = ?", (doc_id,))
         self.conn.execute("DELETE FROM documents WHERE doc_id = ?", (doc_id,))
-        if self.vectors is not None:
-            self.vectors.delete_doc(doc_id)
+        if self._vector_cleaner is not None:
+            self._vector_cleaner.delete_doc(doc_id)
         self.conn.commit()
 
     # --- フィールド検索フィルタ (§2.9) ---
