@@ -105,7 +105,7 @@ def report_er(table_name: str, columns: list[ColumnInfo]) -> str:
 
 def report_sql(table_name: str, columns: list[ColumnInfo]) -> str:
     pk_candidates = [c for c in columns if c.pk_candidate]
-    lines = [f"CREATE TABLE {table_name} ("]
+    lines = [f"CREATE TABLE {_quote(table_name)} ("]
     col_lines = []
 
     for c in columns:
@@ -122,4 +122,4 @@ def report_sql(table_name: str, columns: list[ColumnInfo]) -> str:
 
 
 def _quote(name: str) -> str:
-    return f'"{name}"' if not name.isidentifier() or name[0].isdigit() else name
+    return '"' + name.replace('"', '""') + '"'

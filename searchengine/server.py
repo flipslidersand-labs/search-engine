@@ -32,6 +32,7 @@ from fastapi.security.api_key import APIKeyHeader  # pylint: disable=import-erro
 from pydantic import BaseModel, Field  # pylint: disable=import-error
 
 from . import hybrid, ingest, query, rag, tokenizer
+from .config import open_index
 from .index import Index
 from .llm import LLMError
 from .metrics import (
@@ -164,18 +165,7 @@ class AskResponse(BaseModel):
 
 
 def _open_index(*, want_vector: bool = False) -> Index:
-    db_path = _DB_PATH
-    embedder = None
-    if want_vector:
-        from .embedder import create_embedder
-
-        embedder = create_embedder()
-    use_contextual_prefix = os.environ.get("SEARCH_ENGINE_CONTEXTUAL_PREFIX", "").lower() in (
-        "1",
-        "true",
-        "yes",
-    )
-    return Index(db_path, embedder=embedder, use_contextual_prefix=use_contextual_prefix)
+    return open_index(_DB_PATH, want_vector)
 
 
 # ── エンドポイント ────────────────────────────────────────────────────────────
@@ -344,8 +334,9 @@ def ask(req: AskRequest) -> AskResponse:
                 ollama_url=req.ollama_url or os.environ.get("OLLAMA_URL", "http://localhost:11434"),
                 model=req.model,
             )
-        except LLMError as e:
-            raise HTTPException(status_code=500, detail=f"Ollama エラー: {e}")
+        except LLMError:
+            logger.exception("Ollama エラー")
+            raise HTTPException(status_code=500, detail="Ollama エラー")
         finally:
             idx.close()
 
