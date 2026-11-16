@@ -56,4 +56,4 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - API-key authentication and `/index` path-traversal protection ([#58](https://github.com/flipslidersand-labs/search-engine/pull/58), [#57](https://github.com/flipslidersand-labs/search-engine/pull/57))
 - Internal LAN IP removed from `deploy.sh` messages ([#108](https://github.com/flipslidersand-labs/search-engine/pull/108))
 - Vulnerable locked packages updated: certifi, opentelemetry-api, pyjwt ([#159](https://github.com/flipslidersand-labs/search-engine/pull/159))
-- Identifiers in schema_gen `CREATE TABLE` output are always quoted; `deploy.sh` excludes `.env` from `rsync --delete`; `/ask` and MCP no longer expose exception text (fixed messages, details logged) ([#171](https://github.com/flipslidersand-labs/search-engine/pull/171))
+- Identifiers in schema_gen `CREATE TABLE` output are always quoted; `deploy.sh` excludes `.env` from `rsync --delete`; `/ask` and MCP no longer expose the text of unexpected exceptions (fixed messages, details logged; input-validation errors are still returned as-is) ([#171](https://github.com/flipslidersand-labs/search-engine/pull/171))
