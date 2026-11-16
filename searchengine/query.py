@@ -57,10 +57,15 @@ def parse(user_query: str) -> ParsedQuery:
     return ParsedQuery(fts=to_fts_query(fts_input), raw=raw, filters=filters)
 
 
+def _word_tokens(text: str) -> list[str]:
+    """unicode61 で語にならない（英数字・かな漢字を含まない）トークンを捨てる (#169)。"""
+    return [t for t in tokenizer.tokenize(text) if any(c.isalnum() for c in t)]
+
+
 def _quote_terms(text: str) -> list[str]:
     """生テキストを形態素分割し、各語を FTS5 用にクォート。"""
     out = []
-    for tok in tokenizer.tokenize(text):
+    for tok in _word_tokens(text):
         # FTS5 の特殊文字を避けるため二重引用符で包む
         out.append('"' + tok.replace('"', "") + '"')
     return out
@@ -75,7 +80,7 @@ def to_fts_query(user_query: str) -> str:
         before = user_query[pos : m.start()]
         parts.extend(_emit_tokens(before))
         # フレーズはトークン化して NEAR 的に連結（順序保持の "a b" 形式）
-        phrase_tokens = tokenizer.tokenize(m.group(1))
+        phrase_tokens = _word_tokens(m.group(1))
         if phrase_tokens:
             parts.append('"' + " ".join(phrase_tokens) + '"')
         pos = m.end()
@@ -84,7 +89,7 @@ def to_fts_query(user_query: str) -> str:
     # 空なら全ヒット回避のため非マッチ語を返す
     if not [p for p in parts if p not in ("AND", "OR", "NOT")]:
         return '""'
-    return _join(parts)
+    return _join(parts) or '""'
 
 
 def _emit_tokens(text: str) -> list[str]:
@@ -94,7 +99,10 @@ def _emit_tokens(text: str) -> list[str]:
         if low in _BOOL:
             result.append(_BOOL[low])
         else:
-            result.extend(_quote_terms(word))
+            # 1 語 = 1 要素（bigram 全体を AND 連結した群）。群単位で NOT を扱うため (#169)
+            terms = _quote_terms(word)
+            if terms:
+                result.append(" AND ".join(terms))
     return result
 
 
@@ -121,6 +129,8 @@ def _normalize_ops(parts: list[str]) -> list[str]:
     for p in parts:
         if p in _OPS:
             if not out:
+                if p == "NOT":
+                    out.append(p)  # 先頭 NOT は後段で意味を保って並べ替える
                 continue
             if out[-1] in _OPS:
                 out[-1] = p
@@ -128,4 +138,21 @@ def _normalize_ops(parts: list[str]) -> list[str]:
         out.append(p)
     while out and out[-1] in _OPS:
         out.pop()
+    while out and out[0] in ("AND", "OR"):
+        out.pop(0)
+    if out and out[0] == "NOT":
+        # FTS5 は先頭 NOT 不可。先頭の NOT 句をすべて後ろへ回す:
+        #   `NOT a NOT b c` → `c NOT a NOT b`。肯定語が無ければ空。
+        # 先頭 NOT 句の直後の AND/OR は捨てる（`NOT a OR b` → `b NOT a`）。
+        negs: list[str] = []
+        while len(out) >= 2 and out[0] == "NOT" and out[1] not in _OPS:
+            neg = out[1]
+            negs.append(f"({neg})" if " AND " in neg else neg)
+            out = out[2:]
+        while out and out[0] in ("AND", "OR"):
+            out.pop(0)
+        if not out or out[0] == "NOT" or not negs:
+            return []
+        for n in negs:
+            out += ["NOT", n]
     return out
