@@ -1,5 +1,7 @@
 # search-engine
 
+Release type: `service`
+
 BM25 + Vector Hybrid Search + RAG (Retrieval-Augmented Generation) REST API.
 
 Combines SQLite FTS5 keyword search with [multilingual-e5-base](https://huggingface.co/intfloat/multilingual-e5-base) vector search via RRF (Reciprocal Rank Fusion), and provides natural language Q&A through Ollama integration. Can also be called directly from Claude Code as an MCP server.
