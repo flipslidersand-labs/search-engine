@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 from . import chunker, tokenizer
 from .contextual import add_context
+from .errors import VectorIndexUnavailableError
 from .vector_store import VectorStore
 
 
@@ -207,7 +208,7 @@ class Index:
     # --- ベクトル検索 (§2.6) ---
     def vector_search(self, text: str, limit: int = 10, filters: dict | None = None) -> list[Hit]:
         if self.vectors is None:
-            raise RuntimeError("Index was created without an embedder")
+            raise VectorIndexUnavailableError("Index was created without an embedder")
         qvec = self.embedder.encode([text], mode="search")[0]
         allowed = self.allowed_doc_ids(filters)
         vhits = self.vectors.search(qvec, limit=limit, allowed_docs=allowed)
